@@ -29,5 +29,25 @@
  * @return bool True if upgrade succeeded.
  */
 function xmldb_playervideo_upgrade(int $oldversion): bool {
+    global $DB;
+
+    $dbman = $DB->get_manager();
+
+    if ($oldversion < 2026083101) {
+        $table = new xmldb_table('playervideo');
+
+        $field = new xmldb_field('completionallinteractions', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field('completionwatchtoend', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026083101, 'playervideo');
+    }
+
     return true;
 }

@@ -22,6 +22,8 @@
         <FIELD NAME="hudcorrectitem" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="block_playerhud item ID granted per correct answer (0 = unconfigured)"/>
         <FIELD NAME="hudretrycostitem" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="block_playerhud item charged from the 2nd attempt onwards (0 = free)"/>
         <FIELD NAME="hudretrycostqty" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Quantity charged per retry"/>
+        <FIELD NAME="completionallinteractions" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Custom completion rule: student must answer/view every interaction"/>
+        <FIELD NAME="completionwatchtoend" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Custom completion rule: student must watch until the player's native ended event"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
       </FIELDS>
