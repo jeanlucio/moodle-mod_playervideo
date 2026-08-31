@@ -85,6 +85,7 @@ final class submit_answer_test extends \advanced_testcase {
             'attemptid' => $this->attemptid,
             'answerid' => 0,
             'responsetext' => '',
+            'polloptionid' => 0,
         ], $args));
     }
 
@@ -139,6 +140,73 @@ final class submit_answer_test extends \advanced_testcase {
         ]);
 
         return ['interactionid' => $interactionid, 'correctanswerid' => $correctanswerid, 'wronganswerid' => $wronganswerid];
+    }
+
+    /**
+     * Creates a poll interaction with two options on $this->instance.
+     *
+     * @return array{interactionid: int, optionaid: int, optionbid: int}
+     */
+    private function make_poll_interaction(): array {
+        global $DB;
+
+        $now = time();
+        $interactionid = $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $this->instance->id, 'timestamp' => 15, 'type' => 'poll', 'weight' => 1,
+            'questionid' => null, 'notetext' => null, 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $optionaid = $DB->insert_record('playervideo_poll_options', (object) [
+            'interactionid' => $interactionid, 'optiontext' => 'Option A', 'sortorder' => 0,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $optionbid = $DB->insert_record('playervideo_poll_options', (object) [
+            'interactionid' => $interactionid, 'optiontext' => 'Option B', 'sortorder' => 1,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        return ['interactionid' => $interactionid, 'optionaid' => $optionaid, 'optionbid' => $optionbid];
+    }
+
+    /**
+     * Tests that voting on a poll records status 'voted' with no correctness, and never grants
+     * a PlayerHUD item even when the instance has one configured.
+     *
+     * @return void
+     */
+    public function test_records_a_poll_vote(): void {
+        global $DB;
+
+        // A PlayerHUD item configured on the instance must still never be granted for a poll.
+        $DB->set_field('playervideo', 'hudcorrectitem', 999, ['id' => $this->instance->id]);
+        $fixture = $this->make_poll_interaction();
+
+        $result = $this->call(['interactionid' => $fixture['interactionid'], 'polloptionid' => $fixture['optionaid']]);
+
+        $this->assertFalse($result['error']);
+        $this->assertNull($result['data']['iscorrect']);
+        $this->assertSame('voted', $result['data']['status']);
+
+        $response = $DB->get_record('playervideo_responses', ['interactionid' => $fixture['interactionid']], '*', MUST_EXIST);
+        $this->assertSame((int) $fixture['optionaid'], (int) $response->polloptionid);
+        $this->assertNull($response->iscorrect);
+        $this->assertSame(0, (int) $response->hudrewarded);
+    }
+
+    /**
+     * Tests that a poll option id from a different interaction is rejected, even though the
+     * row itself exists in the database (instance isolation, see the plugin SCOPE).
+     *
+     * @return void
+     */
+    public function test_rejects_a_poll_option_from_another_interaction(): void {
+        $first = $this->make_poll_interaction();
+        $second = $this->make_poll_interaction();
+
+        $result = $this->call(['interactionid' => $second['interactionid'], 'polloptionid' => $first['optionaid']]);
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_invalidpolloption', $result['exception']->errorcode);
     }
 
     /**

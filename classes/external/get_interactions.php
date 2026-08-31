@@ -77,6 +77,12 @@ class get_interactions extends external_api {
         ));
         $questiontexts = question_service::get_question_texts($questionids, $context);
 
+        $pollinteractionids = array_values(array_filter(array_map(
+            static fn($record) => $record->type === 'poll' ? (int) $record->id : null,
+            $records
+        )));
+        $polloptionsbyinteraction = self::get_poll_options($pollinteractionids);
+
         $interactions = [];
         foreach ($records as $record) {
             $questionpreview = $record->type === 'question' && $record->questionid !== null
@@ -91,6 +97,7 @@ class get_interactions extends external_api {
                 'questionid' => $record->questionid !== null ? (int) $record->questionid : 0,
                 'questionpreview' => $questionpreview,
                 'notetext' => $record->notetext ?? '',
+                'polloptions' => $polloptionsbyinteraction[(int) $record->id] ?? [],
             ];
         }
 
@@ -99,6 +106,39 @@ class get_interactions extends external_api {
             'trimend' => $instance->trimend !== null ? (float) $instance->trimend : null,
             'interactions' => $interactions,
         ];
+    }
+
+    /**
+     * Returns every poll option for the given interaction ids, grouped by interaction id, in a
+     * single query — avoids one query per poll interaction in the loop above.
+     *
+     * @param int[] $interactionids Poll interaction ids.
+     * @return array<int, array> Interaction id => list of {id, text}.
+     */
+    private static function get_poll_options(array $interactionids): array {
+        global $DB;
+
+        if (empty($interactionids)) {
+            return [];
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($interactionids);
+        $records = $DB->get_records_select(
+            'playervideo_poll_options',
+            "interactionid $insql",
+            $inparams,
+            'interactionid ASC, sortorder ASC'
+        );
+
+        $grouped = [];
+        foreach ($records as $record) {
+            $grouped[(int) $record->interactionid][] = [
+                'id' => (int) $record->id,
+                'text' => $record->optiontext,
+            ];
+        }
+
+        return $grouped;
     }
 
     /**
@@ -114,11 +154,18 @@ class get_interactions extends external_api {
                 new external_single_structure([
                     'id' => new external_value(PARAM_INT, 'Interaction id'),
                     'timestamp' => new external_value(PARAM_FLOAT, 'Video second where the interaction fires'),
-                    'type' => new external_value(PARAM_ALPHA, 'question | note'),
+                    'type' => new external_value(PARAM_ALPHA, 'question | note | poll'),
                     'weight' => new external_value(PARAM_FLOAT, 'Grading weight (only meaningful when type is question)'),
-                    'questionid' => new external_value(PARAM_INT, 'Question Bank id (0 when type is note)'),
+                    'questionid' => new external_value(PARAM_INT, 'Question Bank id (0 when type is note or poll)'),
                     'questionpreview' => new external_value(PARAM_RAW, 'Formatted question text, for the editor list'),
-                    'notetext' => new external_value(PARAM_RAW, 'Note content (empty when type is question)'),
+                    'notetext' => new external_value(PARAM_RAW, 'Note content (empty unless type is note)'),
+                    'polloptions' => new external_multiple_structure(
+                        new external_single_structure([
+                            'id' => new external_value(PARAM_INT, 'Poll option id'),
+                            'text' => new external_value(PARAM_TEXT, 'Option text'),
+                        ]),
+                        'Poll options, in display order (empty unless type is poll)'
+                    ),
                 ]),
                 'Timeline interactions, ordered by timestamp'
             ),

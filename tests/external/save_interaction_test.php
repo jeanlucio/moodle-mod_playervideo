@@ -63,6 +63,7 @@ final class save_interaction_test extends \advanced_testcase {
             'type' => '',
             'questionid' => 0,
             'notetext' => '',
+            'polloptions' => [],
             'weight' => 1.0,
             'delete' => false,
         ], $args));
@@ -273,5 +274,193 @@ final class save_interaction_test extends \advanced_testcase {
 
         $this->assertTrue($result['error']);
         $this->assertSame('error_interactionnotfound', $result['exception']->errorcode);
+    }
+
+    /**
+     * Tests that a poll interaction is created with its options, in order.
+     *
+     * @return void
+     */
+    public function test_creates_a_poll_with_options(): void {
+        global $DB;
+
+        $instance = $this->make_instance();
+
+        $result = $this->call([
+            'playervideoid' => $instance->id,
+            'timestamp' => 30,
+            'type' => 'poll',
+            'polloptions' => ['Red', 'Blue', 'Green'],
+        ]);
+
+        $this->assertFalse($result['error']);
+        $interactionid = $result['data']['interactionid'];
+        $options = array_values($DB->get_records(
+            'playervideo_poll_options',
+            ['interactionid' => $interactionid],
+            'sortorder ASC'
+        ));
+        $this->assertCount(3, $options);
+        $this->assertSame(['Red', 'Blue', 'Green'], array_map(static fn($o) => $o->optiontext, $options));
+    }
+
+    /**
+     * Tests that a poll needs at least 2 options.
+     *
+     * @return void
+     */
+    public function test_poll_rejects_too_few_options(): void {
+        $instance = $this->make_instance();
+
+        $result = $this->call([
+            'playervideoid' => $instance->id,
+            'timestamp' => 30,
+            'type' => 'poll',
+            'polloptions' => ['Only one'],
+        ]);
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_invalidpolloptioncount', $result['exception']->errorcode);
+    }
+
+    /**
+     * Tests that a poll cannot have more than 6 options.
+     *
+     * @return void
+     */
+    public function test_poll_rejects_too_many_options(): void {
+        $instance = $this->make_instance();
+
+        $result = $this->call([
+            'playervideoid' => $instance->id,
+            'timestamp' => 30,
+            'type' => 'poll',
+            'polloptions' => ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+        ]);
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_invalidpolloptioncount', $result['exception']->errorcode);
+    }
+
+    /**
+     * Tests that a poll's options can be freely replaced while it has no votes yet.
+     *
+     * @return void
+     */
+    public function test_editing_a_poll_before_any_votes_replaces_options_freely(): void {
+        global $DB;
+
+        $instance = $this->make_instance();
+        $created = $this->call([
+            'playervideoid' => $instance->id,
+            'timestamp' => 30,
+            'type' => 'poll',
+            'polloptions' => ['Red', 'Blue'],
+        ]);
+        $interactionid = $created['data']['interactionid'];
+
+        $this->call([
+            'playervideoid' => $instance->id,
+            'interactionid' => $interactionid,
+            'timestamp' => 30,
+            'type' => 'poll',
+            'polloptions' => ['Yellow', 'Purple', 'Orange'],
+        ]);
+
+        $options = array_values($DB->get_records(
+            'playervideo_poll_options',
+            ['interactionid' => $interactionid],
+            'sortorder ASC'
+        ));
+        $this->assertSame(['Yellow', 'Purple', 'Orange'], array_map(static fn($o) => $o->optiontext, $options));
+    }
+
+    /**
+     * Tests that a poll's options are entirely frozen once it has any votes — reconciling by
+     * position instead would risk silently reassigning an existing vote to a different option
+     * text, which is worse than refusing the edit outright.
+     *
+     * @return void
+     */
+    public function test_cannot_change_poll_options_once_voted(): void {
+        global $DB;
+
+        $instance = $this->make_instance();
+        $created = $this->call([
+            'playervideoid' => $instance->id,
+            'timestamp' => 30,
+            'type' => 'poll',
+            'polloptions' => ['Red', 'Blue'],
+        ]);
+        $interactionid = $created['data']['interactionid'];
+        $blueid = $DB->get_field('playervideo_poll_options', 'id', [
+            'interactionid' => $interactionid,
+            'optiontext' => 'Blue',
+        ]);
+
+        $now = time();
+        $attemptid = $DB->insert_record('playervideo_attempts', (object) [
+            'playervideoid' => $instance->id, 'userid' => 2, 'attemptnumber' => 1, 'status' => 'inprogress',
+            'grade' => null, 'hudretrycharged' => 0, 'timestart' => $now, 'timefinish' => null,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('playervideo_responses', (object) [
+            'playervideoid' => $instance->id, 'userid' => 2, 'attemptid' => $attemptid,
+            'interactionid' => $interactionid, 'questionid' => null, 'answerid' => null,
+            'polloptionid' => $blueid, 'responsetext' => null, 'iscorrect' => null, 'hudrewarded' => 0,
+            'aigrade' => null, 'aifeedback' => null, 'teachergrade' => null, 'teacherfeedback' => null,
+            'status' => 'voted', 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $result = $this->call([
+            'playervideoid' => $instance->id,
+            'interactionid' => $interactionid,
+            'timestamp' => 30,
+            'type' => 'poll',
+            'polloptions' => ['Red', 'Green'],
+        ]);
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_pollhasvotes', $result['exception']->errorcode);
+        $this->assertTrue($DB->record_exists('playervideo_poll_options', ['id' => $blueid]));
+
+        // Resubmitting the exact same options (e.g. only the timestamp changed) is a harmless
+        // no-op, not an error — nothing about the option set actually changed.
+        $unchanged = $this->call([
+            'playervideoid' => $instance->id,
+            'interactionid' => $interactionid,
+            'timestamp' => 45,
+            'type' => 'poll',
+            'polloptions' => ['Red', 'Blue'],
+        ]);
+        $this->assertFalse($unchanged['error']);
+        $this->assertSame(2, $DB->count_records('playervideo_poll_options', ['interactionid' => $interactionid]));
+    }
+
+    /**
+     * Tests that deleting a poll interaction also deletes its options.
+     *
+     * @return void
+     */
+    public function test_deleting_a_poll_deletes_its_options(): void {
+        global $DB;
+
+        $instance = $this->make_instance();
+        $created = $this->call([
+            'playervideoid' => $instance->id,
+            'timestamp' => 30,
+            'type' => 'poll',
+            'polloptions' => ['Red', 'Blue'],
+        ]);
+        $interactionid = $created['data']['interactionid'];
+
+        $result = $this->call([
+            'playervideoid' => $instance->id,
+            'interactionid' => $interactionid,
+            'delete' => true,
+        ]);
+
+        $this->assertFalse($result['error']);
+        $this->assertSame(0, $DB->count_records('playervideo_poll_options', ['interactionid' => $interactionid]));
     }
 }

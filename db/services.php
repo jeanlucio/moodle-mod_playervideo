@@ -105,4 +105,12 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/playervideo:attempt,mod/playervideo:reviewresponses',
     ],
+    'mod_playervideo_get_poll_results' => [
+        'classname' => 'mod_playervideo\external\get_poll_results',
+        'methodname' => 'execute',
+        'description' => 'Returns the aggregate vote distribution of a poll interaction.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'mod/playervideo:attempt',
+    ],
 ];

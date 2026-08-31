@@ -64,10 +64,10 @@
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="playervideoid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to playervideo"/>
         <FIELD NAME="timestamp" TYPE="number" LENGTH="10" NOTNULL="true" DECIMALS="2" SEQUENCE="false" COMMENT="Video second where the interaction fires"/>
-        <FIELD NAME="type" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="question | note"/>
+        <FIELD NAME="type" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="question | note | poll"/>
         <FIELD NAME="weight" TYPE="number" LENGTH="10" NOTNULL="true" DEFAULT="1.00000" DECIMALS="5" SEQUENCE="false" COMMENT="Grading weight; only used when type is question"/>
-        <FIELD NAME="questionid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Foreign key to the Question Bank question.id; null when type is note"/>
-        <FIELD NAME="notetext" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Content shown when type is note; null when type is question"/>
+        <FIELD NAME="questionid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Foreign key to the Question Bank question.id; null when type is note or poll"/>
+        <FIELD NAME="notetext" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Content shown when type is note; null when type is question or poll"/>
         <FIELD NAME="notetextformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
@@ -116,6 +116,7 @@
         <FIELD NAME="interactionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to playervideo_interactions"/>
         <FIELD NAME="questionid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Snapshot of the source Question Bank id, for audit if the interaction is later removed"/>
         <FIELD NAME="answerid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Foreign key to question_answers, when the response is multiple choice"/>
+        <FIELD NAME="polloptionid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Foreign key to playervideo_poll_options, when the interaction is a poll"/>
         <FIELD NAME="responsetext" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Free-text response, when the interaction is an open question"/>
         <FIELD NAME="iscorrect" TYPE="int" LENGTH="1" NOTNULL="false" SEQUENCE="false" COMMENT="Null until graded; 0/1 for multiple choice (automatic grading)"/>
         <FIELD NAME="hudrewarded" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Whether the PlayerHUD item was already granted for this interactionid+student, across any attempt"/>
@@ -123,7 +124,7 @@
         <FIELD NAME="aifeedback" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="AI feedback suggestion (open question)"/>
         <FIELD NAME="teachergrade" TYPE="number" LENGTH="10" NOTNULL="false" DECIMALS="5" SEQUENCE="false" COMMENT="Teacher-confirmed grade (open question), the only one that counts officially"/>
         <FIELD NAME="teacherfeedback" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
-        <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="answered" SEQUENCE="false" COMMENT="answered | viewed (note) | pending_ai | pending_review | graded"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="answered" SEQUENCE="false" COMMENT="answered | viewed (note) | voted (poll) | pending_ai | pending_review | graded"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
       </FIELDS>
@@ -135,10 +136,26 @@
         <KEY NAME="interactionid" TYPE="foreign" FIELDS="interactionid" REFTABLE="playervideo_interactions" REFFIELDS="id"/>
         <KEY NAME="questionid" TYPE="foreign" FIELDS="questionid" REFTABLE="question" REFFIELDS="id"/>
         <KEY NAME="answerid" TYPE="foreign" FIELDS="answerid" REFTABLE="question_answers" REFFIELDS="id"/>
+        <KEY NAME="polloptionid" TYPE="foreign" FIELDS="polloptionid" REFTABLE="playervideo_poll_options" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
         <INDEX NAME="interactionid-attemptid" UNIQUE="true" FIELDS="interactionid, attemptid"/>
       </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="playervideo_poll_options" COMMENT="Answer options for a poll-type interaction; never lives in the Question Bank, a poll has no correct answer to validate">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="interactionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to playervideo_interactions; only meaningful when type is poll"/>
+        <FIELD NAME="optiontext" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Short text of the option"/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="interactionid" TYPE="foreign" FIELDS="interactionid" REFTABLE="playervideo_interactions" REFFIELDS="id"/>
+      </KEYS>
     </TABLE>
 
     <TABLE NAME="playervideo_captions" COMMENT="Manually authored caption track (VTT) per language, for one instance">

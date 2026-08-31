@@ -52,6 +52,7 @@ class submit_answer extends external_api {
             'interactionid' => new external_value(PARAM_INT, 'Interaction id'),
             'answerid' => new external_value(PARAM_INT, 'Chosen answer id, for multichoice/truefalse', VALUE_DEFAULT, 0),
             'responsetext' => new external_value(PARAM_RAW, 'Free-text response, for an open question', VALUE_DEFAULT, ''),
+            'polloptionid' => new external_value(PARAM_INT, 'Chosen poll option id, when type is poll', VALUE_DEFAULT, 0),
         ]);
     }
 
@@ -62,9 +63,16 @@ class submit_answer extends external_api {
      * @param int $interactionid Interaction id.
      * @param int $answerid Chosen answer id, for multichoice/truefalse.
      * @param string $responsetext Free-text response, for an open question.
+     * @param int $polloptionid Chosen poll option id, when type is poll.
      * @return array Whether the answer is correct (when known) and the response status.
      */
-    public static function execute(int $attemptid, int $interactionid, int $answerid, string $responsetext): array {
+    public static function execute(
+        int $attemptid,
+        int $interactionid,
+        int $answerid,
+        string $responsetext,
+        int $polloptionid
+    ): array {
         global $DB, $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [
@@ -72,6 +80,7 @@ class submit_answer extends external_api {
             'interactionid' => $interactionid,
             'answerid' => $answerid,
             'responsetext' => $responsetext,
+            'polloptionid' => $polloptionid,
         ]);
 
         $attempt = $DB->get_record('playervideo_attempts', ['id' => $params['attemptid']], '*', MUST_EXIST);
@@ -113,6 +122,7 @@ class submit_answer extends external_api {
         $response->interactionid = $interaction->id;
         $response->questionid = $interaction->questionid;
         $response->answerid = null;
+        $response->polloptionid = null;
         $response->responsetext = null;
         $response->iscorrect = null;
         $response->hudrewarded = 0;
@@ -123,6 +133,16 @@ class submit_answer extends external_api {
 
         if ($interaction->type === 'note') {
             $response->status = 'viewed';
+        } else if ($interaction->type === 'poll') {
+            $optionbelongstopoll = $DB->record_exists('playervideo_poll_options', [
+                'id' => $params['polloptionid'],
+                'interactionid' => $interaction->id,
+            ]);
+            if ($params['polloptionid'] <= 0 || !$optionbelongstopoll) {
+                throw new moodle_exception('error_invalidpolloption', 'mod_playervideo');
+            }
+            $response->polloptionid = $params['polloptionid'];
+            $response->status = 'voted';
         } else {
             $qtype = question_service::get_question_type((int) $interaction->questionid);
             if ($qtype === null) {
@@ -193,7 +213,7 @@ class submit_answer extends external_api {
                 null,
                 NULL_ALLOWED
             ),
-            'status' => new external_value(PARAM_ALPHANUMEXT, 'answered | viewed | pending_review'),
+            'status' => new external_value(PARAM_ALPHANUMEXT, 'answered | viewed | voted | pending_review'),
         ]);
     }
 }

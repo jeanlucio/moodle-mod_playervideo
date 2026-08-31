@@ -140,6 +140,50 @@ final class get_attempt_review_test extends \advanced_testcase {
     }
 
     /**
+     * Tests that a poll vote is reported with the full vote distribution, and the option this
+     * attempt chose flagged as selected — with never a "correct" one.
+     *
+     * @return void
+     */
+    public function test_reports_a_poll_vote_with_distribution(): void {
+        global $DB;
+
+        $now = time();
+        $pollid = $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $this->instance->id, 'timestamp' => 20, 'type' => 'poll', 'weight' => 1,
+            'questionid' => null, 'notetext' => null, 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $redid = $DB->insert_record('playervideo_poll_options', (object) [
+            'interactionid' => $pollid, 'optiontext' => 'Red', 'sortorder' => 0,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $blueid = $DB->insert_record('playervideo_poll_options', (object) [
+            'interactionid' => $pollid, 'optiontext' => 'Blue', 'sortorder' => 1,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $_POST['sesskey'] = sesskey();
+        external_api::call_external_function('mod_playervideo_submit_answer', [
+            'attemptid' => $this->attemptid, 'interactionid' => $pollid, 'polloptionid' => $blueid,
+        ]);
+
+        $result = $this->call();
+
+        $this->assertFalse($result['error']);
+        $row = $result['data']['interactions'][0];
+        $this->assertSame('poll', $row['type']);
+        $this->assertSame('voted', $row['status']);
+        $this->assertCount(2, $row['options']);
+        foreach ($row['options'] as $option) {
+            $this->assertFalse($option['correct']);
+            $wasvoted = $option['id'] === (int) $blueid;
+            $this->assertSame($wasvoted, $option['selected']);
+            $this->assertSame($wasvoted ? 1 : 0, $option['votes']);
+        }
+    }
+
+    /**
      * Tests that another student cannot review this attempt without the reviewresponses
      * capability.
      *

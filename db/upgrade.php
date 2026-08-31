@@ -65,5 +65,37 @@ function xmldb_playervideo_upgrade(int $oldversion): bool {
         upgrade_mod_savepoint(true, 2026083102, 'playervideo');
     }
 
+    if ($oldversion < 2026083105) {
+        $table = new xmldb_table('playervideo_poll_options');
+
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('interactionid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('optiontext', XMLDB_TYPE_CHAR, '255', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('sortorder', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            // No separate index for interactionid: the foreign key above already creates one,
+            // and an identically-named/fielded index alongside it is a coding_exception (Moodle
+            // treats that as a duplicate, not an addition).
+            $table->add_key('interactionid', XMLDB_KEY_FOREIGN, ['interactionid'], 'playervideo_interactions', ['id']);
+
+            $dbman->create_table($table);
+        }
+
+        $responsestable = new xmldb_table('playervideo_responses');
+        $field = new xmldb_field('polloptionid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'answerid');
+        if (!$dbman->field_exists($responsestable, $field)) {
+            $dbman->add_field($responsestable, $field);
+        }
+
+        $key = new xmldb_key('polloptionid', XMLDB_KEY_FOREIGN, ['polloptionid'], 'playervideo_poll_options', ['id']);
+        $dbman->add_key($responsestable, $key);
+
+        upgrade_mod_savepoint(true, 2026083105, 'playervideo');
+    }
+
     return true;
 }

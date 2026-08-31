@@ -109,6 +109,41 @@ final class get_interactions_test extends \advanced_testcase {
     }
 
     /**
+     * Tests that a poll interaction includes its options, in display order.
+     *
+     * @return void
+     */
+    public function test_returns_poll_options(): void {
+        global $DB;
+
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
+        $instance = $generator->create_instance(['course' => $this->course->id]);
+
+        $now = time();
+        $interactionid = $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $instance->id, 'timestamp' => 15, 'type' => 'poll', 'weight' => 1,
+            'questionid' => null, 'notetext' => null, 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('playervideo_poll_options', (object) [
+            'interactionid' => $interactionid, 'optiontext' => 'Red', 'sortorder' => 0,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('playervideo_poll_options', (object) [
+            'interactionid' => $interactionid, 'optiontext' => 'Blue', 'sortorder' => 1,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $this->setUser($this->teacher);
+        $result = $this->call(['playervideoid' => $instance->id]);
+
+        $this->assertFalse($result['error']);
+        $interaction = $result['data']['interactions'][0];
+        $this->assertSame('poll', $interaction['type']);
+        $this->assertSame(['Red', 'Blue'], array_map(static fn($o) => $o['text'], $interaction['polloptions']));
+    }
+
+    /**
      * Tests that a student (without mod/playervideo:manage) is denied.
      *
      * @return void
