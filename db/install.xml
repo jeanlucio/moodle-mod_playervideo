@@ -67,7 +67,7 @@
         <FIELD NAME="type" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="question | note | poll"/>
         <FIELD NAME="weight" TYPE="number" LENGTH="10" NOTNULL="true" DEFAULT="1.00000" DECIMALS="5" SEQUENCE="false" COMMENT="Grading weight; only used when type is question"/>
         <FIELD NAME="questionid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Foreign key to the Question Bank question.id; null when type is note or poll"/>
-        <FIELD NAME="notetext" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Content shown when type is note; null when type is question or poll"/>
+        <FIELD NAME="notetext" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Content shown when type is note, or the prompt text when type is poll; null when type is question"/>
         <FIELD NAME="notetextformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>

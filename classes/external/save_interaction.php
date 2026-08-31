@@ -146,6 +146,11 @@ class save_interaction extends external_api {
                 throw new moodle_exception('error_notetextrequired', 'mod_playervideo');
             }
         } else if ($params['type'] === 'poll') {
+            // The poll's own prompt text reuses notetext — same free-text content shape as a
+            // note, just paired with an options list instead of standing alone.
+            if (trim($params['notetext']) === '') {
+                throw new moodle_exception('error_notetextrequired', 'mod_playervideo');
+            }
             if (count($polloptions) < self::POLL_MIN_OPTIONS || count($polloptions) > self::POLL_MAX_OPTIONS) {
                 throw new moodle_exception('error_invalidpolloptioncount', 'mod_playervideo');
             }
@@ -162,7 +167,7 @@ class save_interaction extends external_api {
         $record->type = $params['type'];
         $record->weight = $params['type'] === 'question' ? max(0.0, $params['weight']) : 1.0;
         $record->questionid = $params['type'] === 'question' ? $params['questionid'] : null;
-        $record->notetext = $params['type'] === 'note' ? $params['notetext'] : null;
+        $record->notetext = $params['type'] !== 'question' ? $params['notetext'] : null;
         $record->notetextformat = FORMAT_HTML;
         $record->timemodified = $now;
 

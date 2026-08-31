@@ -290,11 +290,16 @@ final class save_interaction_test extends \advanced_testcase {
             'playervideoid' => $instance->id,
             'timestamp' => 30,
             'type' => 'poll',
+            'notetext' => 'What is your favourite colour?',
             'polloptions' => ['Red', 'Blue', 'Green'],
         ]);
 
         $this->assertFalse($result['error']);
         $interactionid = $result['data']['interactionid'];
+        $this->assertSame(
+            'What is your favourite colour?',
+            $DB->get_field('playervideo_interactions', 'notetext', ['id' => $interactionid])
+        );
         $options = array_values($DB->get_records(
             'playervideo_poll_options',
             ['interactionid' => $interactionid],
@@ -316,6 +321,7 @@ final class save_interaction_test extends \advanced_testcase {
             'playervideoid' => $instance->id,
             'timestamp' => 30,
             'type' => 'poll',
+            'notetext' => 'Poll prompt?',
             'polloptions' => ['Only one'],
         ]);
 
@@ -335,6 +341,7 @@ final class save_interaction_test extends \advanced_testcase {
             'playervideoid' => $instance->id,
             'timestamp' => 30,
             'type' => 'poll',
+            'notetext' => 'Poll prompt?',
             'polloptions' => ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
         ]);
 
@@ -355,6 +362,7 @@ final class save_interaction_test extends \advanced_testcase {
             'playervideoid' => $instance->id,
             'timestamp' => 30,
             'type' => 'poll',
+            'notetext' => 'Poll prompt?',
             'polloptions' => ['Red', 'Blue'],
         ]);
         $interactionid = $created['data']['interactionid'];
@@ -364,6 +372,7 @@ final class save_interaction_test extends \advanced_testcase {
             'interactionid' => $interactionid,
             'timestamp' => 30,
             'type' => 'poll',
+            'notetext' => 'Poll prompt?',
             'polloptions' => ['Yellow', 'Purple', 'Orange'],
         ]);
 
@@ -390,6 +399,7 @@ final class save_interaction_test extends \advanced_testcase {
             'playervideoid' => $instance->id,
             'timestamp' => 30,
             'type' => 'poll',
+            'notetext' => 'Poll prompt?',
             'polloptions' => ['Red', 'Blue'],
         ]);
         $interactionid = $created['data']['interactionid'];
@@ -417,6 +427,7 @@ final class save_interaction_test extends \advanced_testcase {
             'interactionid' => $interactionid,
             'timestamp' => 30,
             'type' => 'poll',
+            'notetext' => 'Poll prompt?',
             'polloptions' => ['Red', 'Green'],
         ]);
 
@@ -431,6 +442,7 @@ final class save_interaction_test extends \advanced_testcase {
             'interactionid' => $interactionid,
             'timestamp' => 45,
             'type' => 'poll',
+            'notetext' => 'Poll prompt?',
             'polloptions' => ['Red', 'Blue'],
         ]);
         $this->assertFalse($unchanged['error']);
@@ -450,6 +462,7 @@ final class save_interaction_test extends \advanced_testcase {
             'playervideoid' => $instance->id,
             'timestamp' => 30,
             'type' => 'poll',
+            'notetext' => 'Poll prompt?',
             'polloptions' => ['Red', 'Blue'],
         ]);
         $interactionid = $created['data']['interactionid'];

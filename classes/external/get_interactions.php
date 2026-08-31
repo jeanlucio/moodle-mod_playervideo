@@ -158,7 +158,7 @@ class get_interactions extends external_api {
                     'weight' => new external_value(PARAM_FLOAT, 'Grading weight (only meaningful when type is question)'),
                     'questionid' => new external_value(PARAM_INT, 'Question Bank id (0 when type is note or poll)'),
                     'questionpreview' => new external_value(PARAM_RAW, 'Formatted question text, for the editor list'),
-                    'notetext' => new external_value(PARAM_RAW, 'Note content (empty unless type is note)'),
+                    'notetext' => new external_value(PARAM_RAW, 'Note content, or poll prompt text (empty when type is question)'),
                     'polloptions' => new external_multiple_structure(
                         new external_single_structure([
                             'id' => new external_value(PARAM_INT, 'Poll option id'),

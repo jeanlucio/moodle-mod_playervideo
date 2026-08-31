@@ -93,7 +93,7 @@ class get_attempt_review extends external_api {
                 'interactionid' => (int) $interaction->id,
                 'timestamp' => (float) $interaction->timestamp,
                 'type' => $interaction->type,
-                'notetext' => $interaction->type === 'note' ? ($interaction->notetext ?? '') : '',
+                'notetext' => $interaction->type !== 'question' ? ($interaction->notetext ?? '') : '',
                 'questiontext' => '',
                 'qtype' => '',
                 'options' => [],
@@ -189,7 +189,7 @@ class get_attempt_review extends external_api {
                     'interactionid' => new external_value(PARAM_INT, 'Interaction id'),
                     'timestamp' => new external_value(PARAM_FLOAT, 'Video second where the interaction fires'),
                     'type' => new external_value(PARAM_ALPHA, 'question | note | poll'),
-                    'notetext' => new external_value(PARAM_RAW, 'Note content (empty unless type is note)'),
+                    'notetext' => new external_value(PARAM_RAW, 'Note content, or poll prompt text (empty when type is question)'),
                     'questiontext' => new external_value(PARAM_RAW, 'Formatted question text (empty unless type is question)'),
                     'qtype' => new external_value(PARAM_ALPHANUMEXT, 'Question type (empty unless type is question)'),
                     'options' => new external_multiple_structure(
