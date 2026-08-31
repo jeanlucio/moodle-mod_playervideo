@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="mod/playervideo/db" VERSION="20260831" COMMENT="XMLDB file for Moodle mod_playervideo"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+    <TABLE NAME="playervideo" COMMENT="Stores the PlayerVideo activity instances">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="course" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Course playervideo activity belongs to"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="name field for moodle instances"/>
+        <FIELD NAME="intro" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="General introduction of the playervideo activity"/>
+        <FIELD NAME="introformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Format of the intro field"/>
+        <FIELD NAME="videotype" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="youtube | vimeo | html5"/>
+        <FIELD NAME="videourl" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Video URL, when videotype is youtube or vimeo"/>
+        <FIELD NAME="showinline" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Pin the video inline on the course page, without hiding grade/attempts"/>
+        <FIELD NAME="grademethod" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Grade aggregation across attempts: 1=highest, 2=average, 3=first, 4=last"/>
+        <FIELD NAME="grade" TYPE="number" LENGTH="10" NOTNULL="true" DEFAULT="100.00000" DECIMALS="5" SEQUENCE="false" COMMENT="Maximum grade; 0 means No grade (standard core convention)"/>
+        <FIELD NAME="gradepass" TYPE="number" LENGTH="10" NOTNULL="true" DEFAULT="0.00000" DECIMALS="5" SEQUENCE="false" COMMENT="Minimum passing grade"/>
+        <FIELD NAME="maxattempts" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Max attempts allowed (0 means unlimited)"/>
+        <FIELD NAME="allowseekahead" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Disables the forward anti-skip restriction; rewind is always allowed either way"/>
+        <FIELD NAME="hudcorrectitem" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="block_playerhud item ID granted per correct answer (0 = unconfigured)"/>
+        <FIELD NAME="hudretrycostitem" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="block_playerhud item charged from the 2nd attempt onwards (0 = free)"/>
+        <FIELD NAME="hudretrycostqty" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Quantity charged per retry"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="course" UNIQUE="false" FIELDS="course"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="playervideo_progress" COMMENT="Per-student playback progress, for resume and anti-skip validation">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="playervideoid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to playervideo"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to user"/>
+        <FIELD NAME="lastposition" TYPE="number" LENGTH="10" NOTNULL="false" DECIMALS="2" SEQUENCE="false" COMMENT="Seconds; used to resume playback"/>
+        <FIELD NAME="watchedpct" TYPE="number" LENGTH="10" NOTNULL="false" DECIMALS="2" SEQUENCE="false" COMMENT="Percentage actually watched (0-100); input to the anti-skip check"/>
+        <FIELD NAME="watchedtoend" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Whether the player's native ended event already fired (completion rule 2)"/>
+        <FIELD NAME="segments" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="JSON of the second ranges actually watched"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="playervideoid" TYPE="foreign" FIELDS="playervideoid" REFTABLE="playervideo" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="playervideoid-userid" UNIQUE="true" FIELDS="playervideoid, userid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="playervideo_interactions" COMMENT="Timestamp anchor pointing to a question in the Question Bank, or an inline note">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="playervideoid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to playervideo"/>
+        <FIELD NAME="timestamp" TYPE="number" LENGTH="10" NOTNULL="true" DECIMALS="2" SEQUENCE="false" COMMENT="Video second where the interaction fires"/>
+        <FIELD NAME="type" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="question | note"/>
+        <FIELD NAME="weight" TYPE="number" LENGTH="10" NOTNULL="true" DEFAULT="1.00000" DECIMALS="5" SEQUENCE="false" COMMENT="Grading weight; only used when type is question"/>
+        <FIELD NAME="questionid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Foreign key to the Question Bank question.id; null when type is note"/>
+        <FIELD NAME="notetext" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Content shown when type is note; null when type is question"/>
+        <FIELD NAME="notetextformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="playervideoid" TYPE="foreign" FIELDS="playervideoid" REFTABLE="playervideo" REFFIELDS="id"/>
+        <KEY NAME="questionid" TYPE="foreign" FIELDS="questionid" REFTABLE="question" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="playervideoid-timestamp" UNIQUE="false" FIELDS="playervideoid, timestamp"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="playervideo_attempts" COMMENT="One attempt of the activity by a student; multiple attempts allowed when maxattempts permits">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="playervideoid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to playervideo"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to user"/>
+        <FIELD NAME="attemptnumber" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="1st, 2nd, 3rd... attempt by this student on this instance"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="inprogress" SEQUENCE="false" COMMENT="inprogress | pendingcorrection | finished; only finished feeds the Gradebook/grademethod"/>
+        <FIELD NAME="grade" TYPE="number" LENGTH="10" NOTNULL="false" DECIMALS="5" SEQUENCE="false" COMMENT="This attempt's grade (weighted sum, see functional spec); only official once status is finished"/>
+        <FIELD NAME="hudretrycharged" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Whether the PlayerHUD retry cost was already charged for this attempt"/>
+        <FIELD NAME="timestart" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timefinish" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="playervideoid" TYPE="foreign" FIELDS="playervideoid" REFTABLE="playervideo" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="playervideoid-userid-attemptnumber" UNIQUE="false" FIELDS="playervideoid, userid, attemptnumber"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="playervideo_responses" COMMENT="Student response to one interaction, within one attempt">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="playervideoid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to playervideo, avoids a join up to the interaction for reports"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to user"/>
+        <FIELD NAME="attemptid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to playervideo_attempts"/>
+        <FIELD NAME="interactionid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to playervideo_interactions"/>
+        <FIELD NAME="questionid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Snapshot of the source Question Bank id, for audit if the interaction is later removed"/>
+        <FIELD NAME="answerid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Foreign key to question_answers, when the response is multiple choice"/>
+        <FIELD NAME="responsetext" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Free-text response, when the interaction is an open question"/>
+        <FIELD NAME="iscorrect" TYPE="int" LENGTH="1" NOTNULL="false" SEQUENCE="false" COMMENT="Null until graded; 0/1 for multiple choice (automatic grading)"/>
+        <FIELD NAME="hudrewarded" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Whether the PlayerHUD item was already granted for this interactionid+student, across any attempt"/>
+        <FIELD NAME="aigrade" TYPE="number" LENGTH="10" NOTNULL="false" DECIMALS="5" SEQUENCE="false" COMMENT="AI grade suggestion (open question), already within the question's weight; never the official grade"/>
+        <FIELD NAME="aifeedback" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="AI feedback suggestion (open question)"/>
+        <FIELD NAME="teachergrade" TYPE="number" LENGTH="10" NOTNULL="false" DECIMALS="5" SEQUENCE="false" COMMENT="Teacher-confirmed grade (open question), the only one that counts officially"/>
+        <FIELD NAME="teacherfeedback" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="answered" SEQUENCE="false" COMMENT="answered | viewed (note) | pending_ai | pending_review | graded"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="playervideoid" TYPE="foreign" FIELDS="playervideoid" REFTABLE="playervideo" REFFIELDS="id"/>
+        <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+        <KEY NAME="attemptid" TYPE="foreign" FIELDS="attemptid" REFTABLE="playervideo_attempts" REFFIELDS="id"/>
+        <KEY NAME="interactionid" TYPE="foreign" FIELDS="interactionid" REFTABLE="playervideo_interactions" REFFIELDS="id"/>
+        <KEY NAME="questionid" TYPE="foreign" FIELDS="questionid" REFTABLE="question" REFFIELDS="id"/>
+        <KEY NAME="answerid" TYPE="foreign" FIELDS="answerid" REFTABLE="question_answers" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="interactionid-attemptid" UNIQUE="true" FIELDS="interactionid, attemptid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="playervideo_captions" COMMENT="Manually authored caption track (VTT) per language, for one instance">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="playervideoid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Foreign key to playervideo"/>
+        <FIELD NAME="lang" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Language code, e.g. pt-br, en"/>
+        <FIELD NAME="source" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="manual" SEQUENCE="false" COMMENT="manual | youtube | vimeo; informational only"/>
+        <FIELD NAME="content" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="Full caption content, VTT format"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="playervideoid" TYPE="foreign" FIELDS="playervideoid" REFTABLE="playervideo" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="playervideoid-lang" UNIQUE="true" FIELDS="playervideoid, lang"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>
