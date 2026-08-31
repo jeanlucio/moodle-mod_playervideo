@@ -1,0 +1,247 @@
+<?php
+// This file is part of Moodle - https://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * External function tests for submit_answer.
+ *
+ * @package    mod_playervideo
+ * @category   test
+ * @copyright  2026 Jean Lúcio
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+namespace mod_playervideo\external;
+
+use core_external\external_api;
+
+/**
+ * Tests for the mod_playervideo_submit_answer web service.
+ *
+ * @covers \mod_playervideo\external\submit_answer
+ */
+final class submit_answer_test extends \advanced_testcase {
+    /** @var \stdClass Course used by every test. */
+    private \stdClass $course;
+
+    /** @var \stdClass Student, enrolled in $course. */
+    private \stdClass $student;
+
+    /** @var \stdClass PlayerVideo instance used by every test. */
+    private \stdClass $instance;
+
+    /** @var int Open attempt id for $this->student on $this->instance. */
+    private int $attemptid;
+
+    #[\Override]
+    protected function setUp(): void {
+        parent::setUp();
+        $this->resetAfterTest();
+        $this->course = $this->getDataGenerator()->create_course();
+        $this->student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($this->student->id, $this->course->id, 'student');
+
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
+        $this->instance = $generator->create_instance(['course' => $this->course->id]);
+
+        $this->setUser($this->student);
+        $started = $this->call_start_attempt();
+        $this->attemptid = $started['data']['attemptid'];
+    }
+
+    /**
+     * Starts an attempt through the real web service.
+     *
+     * @return array Response shaped as ['error' => bool, 'data' => array|null, ...].
+     */
+    private function call_start_attempt(): array {
+        $_POST['sesskey'] = sesskey();
+        return external_api::call_external_function('mod_playervideo_start_attempt', [
+            'playervideoid' => $this->instance->id,
+        ]);
+    }
+
+    /**
+     * Calls the web service through the real dispatch path.
+     *
+     * @param array $args Web service arguments.
+     * @return array Response shaped as ['error' => bool, 'data' => array|null, ...].
+     */
+    private function call(array $args): array {
+        $_POST['sesskey'] = sesskey();
+        return external_api::call_external_function('mod_playervideo_submit_answer', array_merge([
+            'attemptid' => $this->attemptid,
+            'answerid' => 0,
+            'responsetext' => '',
+        ], $args));
+    }
+
+    /**
+     * Creates a note interaction on $this->instance.
+     *
+     * @return int Interaction id.
+     */
+    private function make_note_interaction(): int {
+        global $DB;
+
+        $now = time();
+        return $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $this->instance->id, 'timestamp' => 5, 'type' => 'note', 'weight' => 1,
+            'questionid' => null, 'notetext' => 'A note', 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+    }
+
+    /**
+     * Creates a true/false question interaction on $this->instance, returning both the
+     * interaction id and the correct/incorrect answer ids.
+     *
+     * @return array{interactionid: int, correctanswerid: int, wronganswerid: int}
+     */
+    private function make_truefalse_interaction(): array {
+        global $DB;
+
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category(['contextid' => \context_system::instance()->id]);
+        $question = $questiongenerator->create_question('truefalse', null, [
+            'category' => $category->id,
+            'correctanswer' => true,
+        ]);
+
+        $answers = $DB->get_records('question_answers', ['question' => $question->id]);
+        $correctanswerid = 0;
+        $wronganswerid = 0;
+        foreach ($answers as $answer) {
+            if ((float) $answer->fraction >= 1.0) {
+                $correctanswerid = (int) $answer->id;
+            } else {
+                $wronganswerid = (int) $answer->id;
+            }
+        }
+
+        $now = time();
+        $interactionid = $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $this->instance->id, 'timestamp' => 10, 'type' => 'question', 'weight' => 1,
+            'questionid' => $question->id, 'notetext' => null, 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        return ['interactionid' => $interactionid, 'correctanswerid' => $correctanswerid, 'wronganswerid' => $wronganswerid];
+    }
+
+    /**
+     * Tests that dismissing a note records a 'viewed' response with no correctness.
+     *
+     * @return void
+     */
+    public function test_records_a_note_as_viewed(): void {
+        global $DB;
+
+        $interactionid = $this->make_note_interaction();
+
+        $result = $this->call(['interactionid' => $interactionid]);
+
+        $this->assertFalse($result['error']);
+        $this->assertNull($result['data']['iscorrect']);
+        $this->assertSame('viewed', $result['data']['status']);
+        $this->assertSame('viewed', $DB->get_field('playervideo_responses', 'status', ['interactionid' => $interactionid]));
+    }
+
+    /**
+     * Tests that a correct true/false answer is recorded as correct.
+     *
+     * @return void
+     */
+    public function test_records_a_correct_answer(): void {
+        $fixture = $this->make_truefalse_interaction();
+
+        $result = $this->call([
+            'interactionid' => $fixture['interactionid'],
+            'answerid' => $fixture['correctanswerid'],
+        ]);
+
+        $this->assertFalse($result['error']);
+        $this->assertTrue($result['data']['iscorrect']);
+        $this->assertSame('answered', $result['data']['status']);
+    }
+
+    /**
+     * Tests that a wrong true/false answer is recorded as incorrect.
+     *
+     * @return void
+     */
+    public function test_records_an_incorrect_answer(): void {
+        $fixture = $this->make_truefalse_interaction();
+
+        $result = $this->call([
+            'interactionid' => $fixture['interactionid'],
+            'answerid' => $fixture['wronganswerid'],
+        ]);
+
+        $this->assertFalse($result['error']);
+        $this->assertFalse($result['data']['iscorrect']);
+    }
+
+    /**
+     * Tests that a second submission for the same interaction, in the same attempt, is
+     * refused — the antifraude lock described in the plugin SCOPE.
+     *
+     * @return void
+     */
+    public function test_rejects_a_second_submission(): void {
+        $interactionid = $this->make_note_interaction();
+
+        $this->call(['interactionid' => $interactionid]);
+        $result = $this->call(['interactionid' => $interactionid]);
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_interactionalreadyanswered', $result['exception']->errorcode);
+    }
+
+    /**
+     * Tests that an attempt belonging to a different student is refused.
+     *
+     * @return void
+     */
+    public function test_rejects_someone_elses_attempt(): void {
+        $otherstudent = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($otherstudent->id, $this->course->id, 'student');
+
+        $interactionid = $this->make_note_interaction();
+
+        $this->setUser($otherstudent);
+        $result = $this->call(['interactionid' => $interactionid]);
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_notyourattempt', $result['exception']->errorcode);
+    }
+
+    /**
+     * Tests that an attempt that is no longer in progress refuses new responses.
+     *
+     * @return void
+     */
+    public function test_rejects_when_attempt_is_not_in_progress(): void {
+        global $DB;
+
+        $DB->set_field('playervideo_attempts', 'status', 'finished', ['id' => $this->attemptid]);
+        $interactionid = $this->make_note_interaction();
+
+        $result = $this->call(['interactionid' => $interactionid]);
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_attemptnotinprogress', $result['exception']->errorcode);
+    }
+}

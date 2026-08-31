@@ -17,21 +17,72 @@
 {{!
     @template mod_playervideo/view
 
-    Placeholder activity page — the interactive player timeline is built in a later phase.
-    Also carries the hidden onboarding content shown automatically, once, on a student's
-    first visit to any PlayerVideo activity on the whole site.
+    The student-facing activity page: a start screen (previous attempts to review, and a
+    start/resume/new-attempt button), the interactive player screen (hidden until an attempt
+    is open) and the onboarding content shown automatically on a student's first visit to any
+    PlayerVideo activity on the site. amd/src/player.js drives all the state transitions
+    between these sections; this template only renders their static shell plus the
+    server-known start-screen data (past attempts, the correct initial button label/notice).
+    The full interactions/embed data set is passed separately, via a hidden
+    application/json data island (see lib/data-passing conventions), not through this context.
 
     Example context (json):
     {
         "intro": "<p>Watch the video and answer as you go.</p>",
-        "placeholdertext": "The interactive player is coming in a later phase.",
-        "introbody": "<p>This video pauses at marked points to show a question or a note.</p>"
+        "introbody": "<p>This video pauses at marked points to show a question or a note.</p>",
+        "canattempt": true,
+        "canstart": true,
+        "startbuttonlabel": "Start",
+        "pendingcorrectionnotice": "",
+        "previousattempts": [
+            {"attemptid": 5, "attemptnumber": 1, "gradeline": "Grade: 80", "pending": false}
+        ]
     }
 }}
 <div class="path-mod-playervideo">
     {{#intro}}
     <div class="playervideo-intro">{{{intro}}}</div>
     {{/intro}}
-    <div class="alert alert-info" id="playervideo-placeholder">{{placeholdertext}}</div>
     <div id="playervideo-onboarding-content" hidden>{{{introbody}}}</div>
+
+    <div id="playervideo-start-screen">
+        {{^canattempt}}
+        <div class="alert alert-warning">{{#str}}cannotattempt, mod_playervideo{{/str}}</div>
+        {{/canattempt}}
+        {{#canattempt}}
+        {{#previousattempts.0}}
+        <h3 class="h5">{{#str}}reviewpreviousattempts, mod_playervideo{{/str}}</h3>
+        <ul class="list-group mb-3" id="playervideo-previous-attempts">
+            {{#previousattempts}}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>{{#str}}attemptnumber, mod_playervideo, {{attemptnumber}}{{/str}} — {{gradeline}}</span>
+                <button type="button" class="btn btn-sm btn-secondary playervideo-review-btn" data-attemptid="{{attemptid}}">
+                    {{#str}}reviewattempt, mod_playervideo{{/str}}
+                </button>
+            </li>
+            {{/previousattempts}}
+        </ul>
+        {{/previousattempts.0}}
+        {{#pendingcorrectionnotice}}
+        <div class="alert alert-info">{{pendingcorrectionnotice}}</div>
+        {{/pendingcorrectionnotice}}
+        {{#canstart}}
+        <button type="button" class="btn btn-primary" id="playervideo-start-btn">{{startbuttonlabel}}</button>
+        {{/canstart}}
+        {{/canattempt}}
+    </div>
+
+    <div id="playervideo-player-screen" hidden>
+        <div id="playervideo-announcer" class="visually-hidden" aria-live="polite"></div>
+        <div id="playervideo-video-wrapper" class="mb-3">
+            <div id="playervideo-target" class="ph-video-embed"></div>
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="playervideo-finish-btn">
+            {{#str}}finishattempt, mod_playervideo{{/str}}
+        </button>
+        <div id="playervideo-interaction-overlay" class="card" hidden></div>
+        <div id="playervideo-review-overlay" class="card" hidden></div>
+    </div>
+
+    <div id="playervideo-summary-screen" hidden></div>
 </div>

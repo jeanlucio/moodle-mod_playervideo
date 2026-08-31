@@ -111,7 +111,10 @@ class attempt_manager {
     public static function start_attempt(int $playervideoid, int $userid): stdClass {
         global $DB;
 
-        if (self::get_open_attempt($playervideoid, $userid) !== null) {
+        $open = self::get_open_attempt($playervideoid, $userid);
+        // A pendingcorrection attempt has nothing left to resume (the video was already
+        // watched through, only the grade is withheld) — it must never block a new one here.
+        if ($open !== null && $open->status === 'inprogress') {
             throw new coding_exception('An attempt is already open for this student on this instance.');
         }
 

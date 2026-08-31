@@ -202,6 +202,55 @@ class question_service {
     }
 
     /**
+     * Returns a question formatted for the read-only review screen, revealing correctness and
+     * feedback per answer.
+     *
+     * Distinct from {@see get_question_for_frontend()} on purpose: that method is used while an
+     * attempt is still live and must never reveal the correct answer ("Blind JSON"), while this
+     * one is only ever called for an attempt that has already finished, where showing the correct
+     * answer and its feedback is exactly the point (mod_quiz's own "Review attempt").
+     *
+     * @param int $questionid The question id.
+     * @param context $context The context for formatting the HTML text.
+     * @return array|null The formatted question, or null if it no longer exists.
+     */
+    public static function get_question_for_review(int $questionid, context $context): ?array {
+        global $DB;
+
+        $question = $DB->get_record(
+            'question',
+            ['id' => $questionid],
+            'id, qtype, questiontext, questiontextformat'
+        );
+
+        if (!$question) {
+            return null;
+        }
+
+        $options = [];
+
+        if ($question->qtype === 'multichoice' || $question->qtype === 'truefalse') {
+            $answers = $DB->get_records('question_answers', ['question' => $questionid], 'id ASC');
+
+            foreach ($answers as $answer) {
+                $options[] = [
+                    'id' => (int) $answer->id,
+                    'text' => format_text($answer->answer, $answer->answerformat, ['context' => $context]),
+                    'correct' => (float) $answer->fraction >= 1.0,
+                    'feedback' => format_text($answer->feedback, $answer->feedbackformat, ['context' => $context]),
+                ];
+            }
+        }
+
+        return [
+            'id' => (int) $question->id,
+            'type' => $question->qtype,
+            'text' => format_text($question->questiontext, $question->questiontextformat, ['context' => $context]),
+            'options' => $options,
+        ];
+    }
+
+    /**
      * Checks whether the given answer is correct for the question, on the server side.
      *
      * @param int $questionid The question id.

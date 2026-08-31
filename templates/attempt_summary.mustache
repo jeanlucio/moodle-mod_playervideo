@@ -1,0 +1,70 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_playervideo/attempt_summary
+
+    Compact list shown right after an attempt finishes: one row per interaction, with the
+    video timestamp, its type and its result. Rendered client-side (core/templates) from
+    amd/src/player.js, right after mod_playervideo_finish_attempt returns — reuses the same
+    per-interaction data the review screen fetches via mod_playervideo_get_attempt_review,
+    already shaped into display-ready strings/classes by the caller (Mustache stays
+    logic-less; formatting the timestamp and picking the result label/class is JS's job).
+
+    Example context (json):
+    {
+        "attemptnumber": 1,
+        "gradeline": "Your grade: 80",
+        "pendingcorrectionnotice": "",
+        "rows": [
+            {"interactionid": 12, "timelabel": "0:45", "typelabel": "Question", "resultlabel": "Correct", "resultclass": "badge-success"},
+            {"interactionid": 13, "timelabel": "1:30", "typelabel": "Note", "resultlabel": "Viewed", "resultclass": "badge-secondary"}
+        ]
+    }
+}}
+<div id="playervideo-attempt-summary" class="path-mod-playervideo">
+    <h3 class="h5">{{#str}}attemptsummaryheader, mod_playervideo{{/str}}</h3>
+    <p>{{#str}}attemptnumber, mod_playervideo, {{attemptnumber}}{{/str}}</p>
+    {{#gradeline}}
+    <p class="fw-bold">{{gradeline}}</p>
+    {{/gradeline}}
+    {{#pendingcorrectionnotice}}
+    <div class="alert alert-info">{{pendingcorrectionnotice}}</div>
+    {{/pendingcorrectionnotice}}
+    <table class="table" id="playervideo-summary-table">
+        <thead>
+            <tr>
+                <th scope="col">{{#str}}timestamp, mod_playervideo{{/str}}</th>
+                <th scope="col">{{#str}}interactiontype, mod_playervideo{{/str}}</th>
+                <th scope="col">{{#str}}actions, mod_playervideo{{/str}}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{#rows}}
+            <tr>
+                <td>
+                    <button type="button" class="btn btn-link p-0 playervideo-summary-row" data-interactionid="{{interactionid}}">
+                        {{timelabel}}
+                    </button>
+                </td>
+                <td>{{typelabel}}</td>
+                <td><span class="badge {{resultclass}}">{{resultlabel}}</span></td>
+            </tr>
+            {{/rows}}
+        </tbody>
+    </table>
+    <button type="button" class="btn btn-secondary" id="playervideo-summary-back">{{#str}}backtoactivity, mod_playervideo{{/str}}</button>
+</div>
