@@ -160,13 +160,18 @@ const addAnswerRow = () => {
 };
 
 /**
- * Updates the read-only preview shown once a question has been picked (from either tab).
+ * Updates the read-only preview shown once a question has been picked from the "pull from
+ * bank" search — includes an explicit reminder that Save is still a separate, required step,
+ * since nothing about clicking a search result otherwise makes that obvious.
+ *
+ * @returns {Promise<void>}
  */
-const updateSelectedQuestionDisplay = () => {
+const updateSelectedQuestionDisplay = async() => {
     const el = document.getElementById('playervideo-selected-question');
     if (selectedQuestionId > 0) {
+        const hint = await getString('selectedquestionhint', 'mod_playervideo');
         el.hidden = false;
-        el.innerHTML = selectedQuestionPreview;
+        el.innerHTML = `<strong>${hint}</strong> ${selectedQuestionPreview}`;
     } else {
         el.hidden = true;
         el.innerHTML = '';
@@ -205,13 +210,45 @@ const searchQuestions = async(query) => {
 };
 
 /**
- * Creates a question from the "create here" tab, via mod_playervideo_create_question, and
- * selects it — the teacher still needs to press the main Save button afterwards to actually
- * place it on the timeline as an interaction.
+ * Saves the interaction currently configured in the form, for the given question id — shared
+ * by "create here" (called automatically right after the question exists) and "pull from
+ * bank" (called when the teacher presses the main Save button after picking a search result).
+ *
+ * @param {number} questionid Question Bank id to place on the timeline.
+ * @returns {Promise<void>}
+ */
+const saveQuestionInteraction = async(questionid) => {
+    await call('mod_playervideo_save_interaction', {
+        playervideoid,
+        interactionid: parseInt(document.getElementById('playervideo-interactionid').value, 10),
+        timestamp: parseFloat(document.getElementById('playervideo-timestamp').value),
+        type: 'question',
+        questionid,
+        notetext: '',
+        weight: parseFloat(document.getElementById('playervideo-weight').value),
+        'delete': false,
+    });
+    resetForm();
+    await loadInteractions();
+};
+
+/**
+ * Creates a question from the "create here" tab (via mod_playervideo_create_question) and
+ * immediately places it on the timeline at the configured timestamp — a single action, not two:
+ * a separate "create" step that still required a further "Save" click was confusing enough in
+ * practice that a teacher could click "create" repeatedly, each time leaving an unused orphan
+ * question behind in the bank, never actually reaching the timeline (see the plugin SCOPE case
+ * log for the real report that caught this).
  *
  * @returns {Promise<void>}
  */
 const createQuestion = async() => {
+    const timestampvalue = document.getElementById('playervideo-timestamp').value;
+    if (timestampvalue.trim() === '' || Number.isNaN(parseFloat(timestampvalue))) {
+        Notification.alert('', await getString('error_timestamprequired', 'mod_playervideo'));
+        return;
+    }
+
     const qtype = document.getElementById('playervideo-qtype').value;
     const questiontext = document.getElementById('playervideo-questiontext').value;
 
@@ -235,17 +272,19 @@ const createQuestion = async() => {
         }));
     }
 
+    const button = document.getElementById('playervideo-create-question-btn');
+    button.disabled = true;
     try {
         const result = await call('mod_playervideo_create_question', args);
-        selectedQuestionId = result.questionid;
-        selectedQuestionPreview = escapeHtml(questiontext);
-        updateSelectedQuestionDisplay();
+        await saveQuestionInteraction(result.questionid);
         Notification.addNotification({
-            message: await getString('questioncreated', 'mod_playervideo'),
+            message: await getString('questioncreatedandadded', 'mod_playervideo'),
             type: 'success',
         });
     } catch (error) {
         Notification.exception(error);
+    } finally {
+        button.disabled = false;
     }
 };
 
