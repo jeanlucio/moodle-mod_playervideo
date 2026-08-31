@@ -349,7 +349,7 @@ function playervideo_get_coursemodule_info(stdClass $coursemodule): cached_cm_in
  * @return void
  */
 function playervideo_cm_info_dynamic(cm_info $cm): void {
-    global $DB;
+    global $DB, $PAGE;
 
     $instance = $DB->get_record('playervideo', ['id' => $cm->instance], 'videotype, videourl, showinline');
     if (!$instance || empty($instance->showinline)) {
@@ -379,18 +379,22 @@ function playervideo_cm_info_dynamic(cm_info $cm): void {
         return;
     }
 
+    $PAGE->requires->css('/mod/playervideo/styles.css');
+
     if ($instance->videotype === 'html5') {
         $html = html_writer::tag('video', '', [
             'src' => $embedurl->out(false),
-            'controls' => true,
-            'class' => 'w-100',
+            // A boolean HTML attribute's value must be empty or repeat the attribute's own
+            // name — html_writer::attribute() would otherwise render true as the literal,
+            // HTML5-invalid string "1" (fails the mustache linter's HTML validation step).
+            'controls' => 'controls',
+            'class' => 'ph-video-embed',
         ]);
     } else {
         $html = html_writer::tag('iframe', '', [
             'src' => $embedurl->out(false),
-            'class' => 'w-100',
-            'style' => 'aspect-ratio: 16 / 9;',
-            'allowfullscreen' => true,
+            'class' => 'ph-video-embed',
+            'allowfullscreen' => 'allowfullscreen',
             'allow' => 'autoplay; fullscreen',
         ]);
     }

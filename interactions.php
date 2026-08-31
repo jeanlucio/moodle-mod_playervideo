@@ -39,6 +39,7 @@ $PAGE->set_url('/mod/playervideo/interactions.php', ['id' => $cm->id]);
 $PAGE->set_title(get_string('manageinteractions', 'mod_playervideo') . ': ' . $instance->name);
 $PAGE->set_heading($course->fullname);
 $PAGE->set_pagelayout('incourse');
+$PAGE->requires->css('/mod/playervideo/styles.css');
 
 $fileurl = null;
 if ($instance->videotype === 'html5') {

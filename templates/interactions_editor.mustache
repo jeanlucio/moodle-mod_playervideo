@@ -34,10 +34,10 @@
 <div class="path-mod-playervideo" id="playervideo-interactions-editor" data-playervideoid="{{playervideoid}}">
     <div class="ph-video-wrapper mb-3">
         {{#embedvideo}}
-            <video src="{{embedurl}}" controls class="w-100"></video>
+            <video src="{{embedurl}}" controls class="ph-video-embed"></video>
         {{/embedvideo}}
         {{#embediframe}}
-            <iframe src="{{embedurl}}" class="w-100" style="aspect-ratio: 16 / 9;" allowfullscreen="1" allow="autoplay; fullscreen"></iframe>
+            <iframe src="{{embedurl}}" class="ph-video-embed" allowfullscreen allow="autoplay; fullscreen"></iframe>
         {{/embediframe}}
         {{^embedurl}}
             <div class="alert alert-warning" id="playervideo-noembed">{{#str}}error_noembed, mod_playervideo{{/str}}</div>
