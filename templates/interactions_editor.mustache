@@ -17,151 +17,68 @@
 {{!
     @template mod_playervideo/interactions_editor
 
-    Teacher-facing timeline management screen: a plain video embed (native provider controls,
-    just for watching/scrubbing while authoring — the interactive pause-for-question player is
-    a different screen, view.php), the trim window fields, the add/edit interaction form, and
-    the list of existing interactions. All data is loaded and saved live via amd/src/
-    interactions_editor.js — this template only renders the static shell.
+    Timeline management screen (Fase 3c redesign): a video "stage" with a real, clickable/
+    draggable timeline below it (markers for existing interactions, handles for the trim
+    window) on one side, and a docked panel that alternates between a type picker (add a new
+    marker) and a focused editor form on the other. Everything inside the stage and the panel
+    is built by amd/src/interactions_editor.js — this template only renders the static shell,
+    the same split this plugin already uses for the student player (view.mustache /
+    amd/src/player.js). The interactions/trim data itself travels via a hidden JSON data
+    island (#playervideo-editor-data, embedded by interactions.php), not through this context.
 
     Example context (json):
     {
-        "embedurl": "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        "embediframe": true,
-        "embedvideo": false,
-        "playervideoid": 5
+        "noembed": false
     }
 }}
-<div class="path-mod-playervideo" id="playervideo-interactions-editor" data-playervideoid="{{playervideoid}}">
-    <div class="ph-video-wrapper mb-3">
-        {{#embedvideo}}
-            <video src="{{embedurl}}" controls class="ph-video-embed"></video>
-        {{/embedvideo}}
-        {{#embediframe}}
-            <iframe src="{{embedurl}}" class="ph-video-embed" allowfullscreen allow="autoplay; fullscreen"></iframe>
-        {{/embediframe}}
-        {{^embedurl}}
-            <div class="alert alert-warning" id="playervideo-noembed">{{#str}}error_noembed, mod_playervideo{{/str}}</div>
-        {{/embedurl}}
-    </div>
+<div class="path-mod-playervideo playervideo-editor" id="playervideo-interactions-editor">
+    <div class="playervideo-stage">
+        <div class="playervideo-video-wrapper">
+            <div id="playervideo-target" class="ph-video-embed"></div>
+        </div>
+        {{#noembed}}
+        <div class="alert alert-warning" id="playervideo-noembed">{{#str}}error_noembed, mod_playervideo{{/str}}</div>
+        {{/noembed}}
 
-    <div class="card mb-3">
-        <div class="card-body">
-            <h3 class="h5">{{#str}}trimheader, mod_playervideo{{/str}}</h3>
-            <div class="row g-2 align-items-end">
-                <div class="col-auto">
-                    <label for="playervideo-trimstart" class="form-label">{{#str}}trimstart, mod_playervideo{{/str}}</label>
-                    <input type="number" min="0" step="0.1" class="form-control" id="playervideo-trimstart">
-                </div>
-                <div class="col-auto">
-                    <label for="playervideo-trimend" class="form-label">{{#str}}trimend, mod_playervideo{{/str}}</label>
-                    <input type="number" min="0" step="0.1" class="form-control" id="playervideo-trimend">
-                </div>
-                <div class="col-auto">
-                    <button type="button" class="btn btn-secondary" id="playervideo-save-trim">{{#str}}save, moodle{{/str}}</button>
-                </div>
+        <div class="playervideo-timeline-wrap">
+            <div class="playervideo-timeline-ruler mono" aria-hidden="true">
+                <span id="playervideo-ruler-start">0:00</span>
+                <span id="playervideo-ruler-end">&nbsp;</span>
+            </div>
+            <div class="playervideo-timeline" id="playervideo-timeline" role="group" aria-label="{{#str}}timelinelabel, mod_playervideo{{/str}}">
+                <div class="playervideo-timeline-track"></div>
+                <div class="playervideo-trim-shade" id="playervideo-trim-shade-start"></div>
+                <div class="playervideo-trim-shade" id="playervideo-trim-shade-end"></div>
+                <div class="playervideo-playhead" id="playervideo-playhead"></div>
+                <button type="button" class="playervideo-trim-handle" id="playervideo-trim-handle-start"
+                    aria-label="{{#str}}trimstart, mod_playervideo{{/str}}"></button>
+                <button type="button" class="playervideo-trim-handle" id="playervideo-trim-handle-end"
+                    aria-label="{{#str}}trimend, mod_playervideo{{/str}}"></button>
+                <div id="playervideo-markers"></div>
+            </div>
+            <div class="playervideo-timeline-legend">
+                <span class="item"><span class="playervideo-swatch playervideo-swatch-question"></span> {{#str}}typequestion, mod_playervideo{{/str}}</span>
+                <span class="item"><span class="playervideo-swatch playervideo-swatch-note"></span> {{#str}}typenote, mod_playervideo{{/str}}</span>
+                <span class="item"><span class="playervideo-swatch playervideo-swatch-poll"></span> {{#str}}typepoll, mod_playervideo{{/str}}</span>
+                <span class="item">{{#str}}timelinehint, mod_playervideo{{/str}}</span>
             </div>
         </div>
-    </div>
 
-    <div class="card mb-3">
-        <div class="card-body">
-            <h3 class="h5" id="playervideo-form-heading">{{#str}}addinteraction, mod_playervideo{{/str}}</h3>
-            <form id="playervideo-interaction-form">
-                <input type="hidden" id="playervideo-interactionid" value="0">
-                <div class="row g-2">
-                    <div class="col-auto">
-                        <label for="playervideo-timestamp" class="form-label">{{#str}}timestamp, mod_playervideo{{/str}}</label>
-                        <input type="number" min="0" step="0.1" required class="form-control" id="playervideo-timestamp">
-                    </div>
-                    <div class="col-auto">
-                        <label for="playervideo-type" class="form-label">{{#str}}interactiontype, mod_playervideo{{/str}}</label>
-                        <select class="form-select" id="playervideo-type">
-                            <option value="note">{{#str}}typenote, mod_playervideo{{/str}}</option>
-                            <option value="question">{{#str}}typequestion, mod_playervideo{{/str}}</option>
-                        </select>
-                    </div>
-                    <div class="col-auto" id="playervideo-weight-group" hidden>
-                        <label for="playervideo-weight" class="form-label">{{#str}}interactionweight, mod_playervideo{{/str}}</label>
-                        <input type="number" min="0" step="0.1" value="1" class="form-control" id="playervideo-weight">
-                    </div>
-                </div>
-
-                <div id="playervideo-note-fields" class="mt-3">
-                    <label for="playervideo-notetext" class="form-label">{{#str}}notetext, mod_playervideo{{/str}}</label>
-                    <textarea class="form-control" id="playervideo-notetext" rows="3"></textarea>
-                </div>
-
-                <div id="playervideo-question-fields" class="mt-3" hidden>
-                    <ul class="nav nav-tabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button type="button" class="nav-link active" id="playervideo-tab-search-btn" data-bs-toggle="tab" data-bs-target="#playervideo-tab-search">{{#str}}pullfrombank, mod_playervideo{{/str}}</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button type="button" class="nav-link" id="playervideo-tab-create-btn" data-bs-toggle="tab" data-bs-target="#playervideo-tab-create">{{#str}}createhere, mod_playervideo{{/str}}</button>
-                        </li>
-                    </ul>
-                    <div class="tab-content border border-top-0 p-3">
-                        <div class="tab-pane show active" id="playervideo-tab-search">
-                            <label for="playervideo-search" class="form-label">{{#str}}searchquestions, mod_playervideo{{/str}}</label>
-                            <input type="text" class="form-control mb-2" id="playervideo-search">
-                            <ul class="list-group" id="playervideo-search-results"></ul>
-                            <div class="alert alert-info mt-2" id="playervideo-selected-question" hidden></div>
-                        </div>
-                        <div class="tab-pane" id="playervideo-tab-create">
-                            <label for="playervideo-qtype" class="form-label">{{#str}}questiontype, mod_playervideo{{/str}}</label>
-                            <select class="form-select mb-2" id="playervideo-qtype">
-                                <option value="multichoice">{{#str}}qtypemultichoice, mod_playervideo{{/str}}</option>
-                                <option value="truefalse">{{#str}}qtypetruefalse, mod_playervideo{{/str}}</option>
-                            </select>
-
-                            <label for="playervideo-questiontext" class="form-label">{{#str}}questiontext, mod_playervideo{{/str}}</label>
-                            <textarea class="form-control mb-2" id="playervideo-questiontext" rows="2"></textarea>
-
-                            <div id="playervideo-multichoice-fields">
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="checkbox" id="playervideo-single" checked>
-                                    <label class="form-check-label" for="playervideo-single">{{#str}}singleanswer, mod_playervideo{{/str}}</label>
-                                </div>
-                                <div id="playervideo-answers"></div>
-                                <button type="button" class="btn btn-sm btn-secondary mt-2" id="playervideo-add-answer">{{#str}}addanswer, mod_playervideo{{/str}}</button>
-                            </div>
-
-                            <div id="playervideo-truefalse-fields" hidden>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="playervideo-tf" id="playervideo-tf-true" value="1" checked>
-                                    <label class="form-check-label" for="playervideo-tf-true">{{#str}}true, mod_playervideo{{/str}}</label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="playervideo-tf" id="playervideo-tf-false" value="0">
-                                    <label class="form-check-label" for="playervideo-tf-false">{{#str}}false, mod_playervideo{{/str}}</label>
-                                </div>
-                            </div>
-
-                            <button type="button" class="btn btn-secondary mt-2" id="playervideo-create-question-btn">{{#str}}createandadd, mod_playervideo{{/str}}</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-3">
-                    <button type="submit" class="btn btn-primary" id="playervideo-save-interaction">{{#str}}save, moodle{{/str}}</button>
-                    <button type="button" class="btn btn-link" id="playervideo-cancel-edit" hidden>{{#str}}cancel, moodle{{/str}}</button>
-                </div>
-            </form>
+        <div class="playervideo-stage-toolbar">
+            <span class="playervideo-addhint" id="playervideo-add-hint"></span>
+            <button type="button" class="btn btn-outline-secondary" id="playervideo-add-here-btn">
+                {{#str}}addhere, mod_playervideo{{/str}}
+            </button>
         </div>
     </div>
 
-    <h3 class="h5">{{#str}}interactions, mod_playervideo{{/str}}</h3>
-    <table class="table" id="playervideo-interactions-table">
-        <thead>
-            <tr>
-                <th scope="col">{{#str}}timestamp, mod_playervideo{{/str}}</th>
-                <th scope="col">{{#str}}interactiontype, mod_playervideo{{/str}}</th>
-                <th scope="col">{{#str}}preview, mod_playervideo{{/str}}</th>
-                <th scope="col">{{#str}}interactionweight, mod_playervideo{{/str}}</th>
-                <th scope="col"><span class="visually-hidden">{{#str}}actions, mod_playervideo{{/str}}</span></th>
-            </tr>
-        </thead>
-        <tbody id="playervideo-interactions-body"></tbody>
-    </table>
-    <div class="alert alert-info" id="playervideo-empty-list" hidden>{{#str}}nointeractions, mod_playervideo{{/str}}</div>
+    <aside class="playervideo-panel">
+        <div class="playervideo-panel-body" id="playervideo-panel-body"></div>
+        <div class="playervideo-panel-footer" id="playervideo-panel-footer" hidden></div>
+        <div class="playervideo-outline">
+            <h2 class="playervideo-section-title">{{#str}}allmarkers, mod_playervideo{{/str}}</h2>
+            <ul class="playervideo-outline-list" id="playervideo-outline-list"></ul>
+            <div class="alert alert-info" id="playervideo-empty-list" hidden>{{#str}}nointeractions, mod_playervideo{{/str}}</div>
+        </div>
+    </aside>
 </div>

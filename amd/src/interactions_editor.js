@@ -14,8 +14,11 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Timeline management screen: trim window, and creating/editing/deleting interactions
- * (questions and notes), either pulled from the Question Bank or authored on the spot.
+ * Timeline management screen (Fase 3c redesign): a real, clickable/draggable video timeline —
+ * markers for existing interactions, handles for the trim window — driving a docked panel that
+ * alternates between a type picker and a focused editor form. Reuses the same source adapters
+ * (player_youtube/vimeo/html5) the student player uses, since the timeline needs the same
+ * duration/seek/currentTime primitives.
  *
  * @module     mod_playervideo/interactions_editor
  * @copyright  2026 Jean Lúcio
@@ -27,10 +30,39 @@ import ModalSaveCancel from 'core/modal_save_cancel';
 import ModalEvents from 'core/modal_events';
 import Notification from 'core/notification';
 import {getString} from 'core/str';
+import {createPlayer as createYoutubePlayer} from 'mod_playervideo/player_youtube';
+import {createPlayer as createVimeoPlayer} from 'mod_playervideo/player_vimeo';
+import {createPlayer as createHtml5Player} from 'mod_playervideo/player_html5';
 
-let playervideoid = 0;
-let selectedQuestionId = 0;
-let selectedQuestionPreview = '';
+/** @var {number} Minimum drag distance, in seconds, to bother saving a trim handle move. */
+const TRIM_DRAG_EPSILON = 0.05;
+
+/** @var {number} Seconds an arrow-key press nudges a trim handle; Shift multiplies this. */
+const TRIM_KEY_STEP = 1;
+
+/** @var {object|null} Editor data embedded server-side by interactions.php. */
+let editorData = null;
+
+/** @var {object|null} The active source adapter. */
+let adapter = null;
+
+/** @var {number} Video duration, in seconds, once known. */
+let duration = 0;
+
+/** @var {Array<object>} Interactions last loaded from the server. */
+let interactions = [];
+
+/** @var {number|null} Current trim window start, in seconds. */
+let trimstart = null;
+
+/** @var {number|null} Current trim window end, in seconds. */
+let trimend = null;
+
+/** @var {number|null} Id of the interaction currently open for editing, null when creating new. */
+let activeInteractionId = null;
+
+/** @var {number} Timestamp (seconds) a new marker would be placed at. */
+let pendingTimestamp = 0;
 
 /**
  * Calls a single mod_playervideo Web Service method.
@@ -54,14 +86,109 @@ const escapeHtml = (text) => {
 };
 
 /**
- * Renders the interactions table body from the given interaction list.
+ * Formats a number of seconds as m:ss.
  *
- * @param {Array<object>} interactions Interactions, ordered by timestamp.
+ * @param {number} seconds Seconds.
+ * @returns {string}
  */
-const renderTable = (interactions) => {
-    const body = document.getElementById('playervideo-interactions-body');
+const formatTime = (seconds) => {
+    const safe = Math.max(0, Math.round(seconds || 0));
+    const minutes = Math.floor(safe / 60);
+    const secs = (safe % 60).toString().padStart(2, '0');
+    return `${minutes}:${secs}`;
+};
+
+/**
+ * Converts a video position to a percentage of the timeline's width.
+ *
+ * @param {number} seconds Position, in seconds.
+ * @returns {number} 0-100.
+ */
+const percentForTime = (seconds) => {
+    if (duration <= 0) {
+        return 0;
+    }
+    return Math.min(100, Math.max(0, (seconds / duration) * 100));
+};
+
+/**
+ * Converts a percentage of the timeline's width back to a video position.
+ *
+ * @param {number} percent 0-100.
+ * @returns {number} Position, in seconds.
+ */
+const timeForPercent = (percent) => (Math.min(100, Math.max(0, percent)) / 100) * duration;
+
+/**
+ * Creates the right source adapter for the currently loaded editorData.
+ *
+ * @returns {Promise<object>}
+ */
+const createAdapterForSource = () => {
+    const factories = {
+        youtube: createYoutubePlayer,
+        vimeo: createVimeoPlayer,
+        html5: createHtml5Player,
+    };
+    const factory = factories[editorData.videotype];
+    return factory('playervideo-target', editorData.embedurl);
+};
+
+/**
+ * Positions the two trim handles and their shaded regions.
+ */
+const renderTrim = () => {
+    const startpercent = percentForTime(trimstart ?? 0);
+    const endpercent = percentForTime(trimend ?? duration);
+
+    const starthandle = document.getElementById('playervideo-trim-handle-start');
+    const endhandle = document.getElementById('playervideo-trim-handle-end');
+    starthandle.style.left = `${startpercent}%`;
+    endhandle.style.left = `${endpercent}%`;
+
+    const startshade = document.getElementById('playervideo-trim-shade-start');
+    startshade.style.left = '0';
+    startshade.style.width = `${startpercent}%`;
+
+    const endshade = document.getElementById('playervideo-trim-shade-end');
+    endshade.style.left = `${endpercent}%`;
+    endshade.style.width = `${100 - endpercent}%`;
+};
+
+/**
+ * Renders every interaction as a marker on the timeline.
+ */
+const renderMarkers = () => {
+    const container = document.getElementById('playervideo-markers');
+    container.innerHTML = '';
+
+    interactions.forEach((interaction) => {
+        const marker = document.createElement('button');
+        marker.type = 'button';
+        marker.className = `playervideo-marker playervideo-marker-${interaction.type}`;
+        if (interaction.id === activeInteractionId) {
+            marker.classList.add('active');
+        }
+        marker.style.left = `${percentForTime(interaction.timestamp)}%`;
+        marker.dataset.id = interaction.id;
+
+        const preview = interaction.type === 'question' ? interaction.questionpreview : interaction.notetext;
+        const plain = preview.replace(/<[^>]*>/g, '').trim();
+        marker.setAttribute('aria-label', `${formatTime(interaction.timestamp)} — ${plain}`);
+
+        marker.addEventListener('click', () => openInteractionForEdit(interaction));
+        container.appendChild(marker);
+    });
+};
+
+/**
+ * Renders the accessible outline list mirroring the timeline markers — the keyboard/screen
+ * reader path to the same interactions (see the plugin SCOPE, a11y requirements).
+ */
+const renderOutline = () => {
+    const list = document.getElementById('playervideo-outline-list');
     const empty = document.getElementById('playervideo-empty-list');
-    body.innerHTML = '';
+    list.innerHTML = '';
 
     if (interactions.length === 0) {
         empty.hidden = false;
@@ -70,255 +197,127 @@ const renderTable = (interactions) => {
     empty.hidden = true;
 
     interactions.forEach((interaction) => {
-        const row = document.createElement('tr');
-
+        const item = document.createElement('li');
+        const button = document.createElement('button');
+        button.type = 'button';
         const preview = interaction.type === 'question' ? interaction.questionpreview : interaction.notetext;
-        row.innerHTML = `
-            <td>${interaction.timestamp}</td>
-            <td>${escapeHtml(interaction.type)}</td>
-            <td>${preview}</td>
-            <td>${interaction.type === 'question' ? interaction.weight : ''}</td>
-            <td>
-                <button type="button" class="btn btn-sm btn-secondary" data-action="edit">
-                    ${escapeHtml('...')}
-                </button>
-                <button type="button" class="btn btn-sm btn-danger" data-action="delete">
-                    ${escapeHtml('x')}
-                </button>
-            </td>
+        const plain = preview.replace(/<[^>]*>/g, '').trim();
+        button.innerHTML = `
+            <span class="playervideo-swatch playervideo-swatch-${interaction.type}"></span>
+            <span class="mono">${formatTime(interaction.timestamp)}</span>
+            <span>${escapeHtml(plain)}</span>
         `;
-        row.querySelector('[data-action="edit"]').addEventListener('click', () => populateFormForEdit(interaction));
-        row.querySelector('[data-action="delete"]').addEventListener('click', () => deleteInteraction(interaction.id));
-        body.appendChild(row);
+        button.addEventListener('click', () => openInteractionForEdit(interaction));
+        item.appendChild(button);
+        list.appendChild(item);
     });
 };
 
 /**
- * Loads the trim window and interactions from the server and renders both.
+ * Loads the trim window and interactions from the server and re-renders the timeline/outline.
  *
  * @returns {Promise<void>}
  */
 const loadInteractions = async() => {
     try {
-        const data = await call('mod_playervideo_get_interactions', {playervideoid});
-        document.getElementById('playervideo-trimstart').value = data.trimstart ?? '';
-        document.getElementById('playervideo-trimend').value = data.trimend ?? '';
-        renderTable(data.interactions);
+        const data = await call('mod_playervideo_get_interactions', {playervideoid: editorData.playervideoid});
+        trimstart = data.trimstart;
+        trimend = data.trimend;
+        interactions = data.interactions;
+        renderTrim();
+        renderMarkers();
+        renderOutline();
     } catch (error) {
         Notification.exception(error);
     }
 };
 
 /**
- * Resets the interaction form back to "create new", clearing every field.
+ * Saves the trim window to the server.
+ *
+ * @returns {Promise<void>}
  */
-const resetForm = () => {
-    document.getElementById('playervideo-interactionid').value = '0';
-    document.getElementById('playervideo-timestamp').value = '';
-    document.getElementById('playervideo-type').value = 'note';
-    document.getElementById('playervideo-notetext').value = '';
-    document.getElementById('playervideo-weight').value = '1';
-    document.getElementById('playervideo-questiontext').value = '';
-    document.getElementById('playervideo-search').value = '';
-    document.getElementById('playervideo-search-results').innerHTML = '';
-    document.getElementById('playervideo-answers').innerHTML = '';
-    document.getElementById('playervideo-cancel-edit').hidden = true;
-    selectedQuestionId = 0;
-    selectedQuestionPreview = '';
-    updateSelectedQuestionDisplay();
-    addAnswerRow();
-    addAnswerRow();
-    toggleTypeFields();
+const saveTrim = async() => {
+    try {
+        await call('mod_playervideo_save_trim', {
+            playervideoid: editorData.playervideoid,
+            trimstart,
+            trimend,
+        });
+    } catch (error) {
+        Notification.exception(error);
+        await loadInteractions();
+    }
 };
 
 /**
- * Shows/hides the note vs question fields based on the currently selected type.
+ * Shows the type picker (add a new marker at pendingTimestamp) in the panel.
+ *
+ * @returns {Promise<void>}
  */
-const toggleTypeFields = () => {
-    const type = document.getElementById('playervideo-type').value;
-    document.getElementById('playervideo-note-fields').hidden = type !== 'note';
-    document.getElementById('playervideo-question-fields').hidden = type !== 'question';
-    document.getElementById('playervideo-weight-group').hidden = type !== 'question';
-};
+const renderPicker = async() => {
+    activeInteractionId = null;
+    renderMarkers();
+    document.getElementById('playervideo-panel-footer').hidden = true;
 
-/**
- * Adds one empty answer row to the multichoice "create here" form.
- */
-const addAnswerRow = () => {
-    const container = document.getElementById('playervideo-answers');
-    const row = document.createElement('div');
-    row.className = 'input-group mb-1 playervideo-answer-row';
-    row.innerHTML = `
-        <div class="input-group-text">
-            <input type="checkbox" class="playervideo-answer-correct" aria-label="correct">
+    const [addlabel, questionlabel, notelabel, polllabel, questiondesc, notedesc, polldesc] = await Promise.all([
+        getString('addmarkerat', 'mod_playervideo', formatTime(pendingTimestamp)),
+        getString('typequestion', 'mod_playervideo'),
+        getString('typenote', 'mod_playervideo'),
+        getString('typepoll', 'mod_playervideo'),
+        getString('questiondescription', 'mod_playervideo'),
+        getString('notedescription', 'mod_playervideo'),
+        getString('polldescription', 'mod_playervideo'),
+    ]);
+
+    const body = document.getElementById('playervideo-panel-body');
+    body.innerHTML = `
+        <div>
+            <h2 class="playervideo-section-title">${escapeHtml(addlabel)}</h2>
+            <div class="playervideo-type-grid" id="playervideo-type-grid">
+                <button type="button" class="playervideo-type-card" data-type="note">
+                    <span class="icon" aria-hidden="true">&#9998;</span>
+                    <strong>${escapeHtml(notelabel)}</strong>
+                    <small>${escapeHtml(notedesc)}</small>
+                </button>
+                <button type="button" class="playervideo-type-card" data-type="question">
+                    <span class="icon" aria-hidden="true">?</span>
+                    <strong>${escapeHtml(questionlabel)}</strong>
+                    <small>${escapeHtml(questiondesc)}</small>
+                </button>
+                <button type="button" class="playervideo-type-card" data-type="poll">
+                    <span class="icon" aria-hidden="true">%</span>
+                    <strong>${escapeHtml(polllabel)}</strong>
+                    <small>${escapeHtml(polldesc)}</small>
+                </button>
+            </div>
         </div>
-        <input type="text" class="form-control playervideo-answer-text">
-        <button type="button" class="btn btn-outline-danger" data-action="remove">&times;</button>
     `;
-    row.querySelector('[data-action="remove"]').addEventListener('click', () => row.remove());
-    container.appendChild(row);
-};
-
-/**
- * Updates the read-only preview shown once a question has been picked from the "pull from
- * bank" search — includes an explicit reminder that Save is still a separate, required step,
- * since nothing about clicking a search result otherwise makes that obvious.
- *
- * @returns {Promise<void>}
- */
-const updateSelectedQuestionDisplay = async() => {
-    const el = document.getElementById('playervideo-selected-question');
-    if (selectedQuestionId > 0) {
-        const hint = await getString('selectedquestionhint', 'mod_playervideo');
-        el.hidden = false;
-        el.innerHTML = `<strong>${hint}</strong> ${selectedQuestionPreview}`;
-    } else {
-        el.hidden = true;
-        el.innerHTML = '';
-    }
-};
-
-/**
- * Searches the Question Bank as the teacher types, and renders clickable results.
- *
- * @param {string} query Free-text search.
- * @returns {Promise<void>}
- */
-const searchQuestions = async(query) => {
-    const results = document.getElementById('playervideo-search-results');
-    results.innerHTML = '';
-    if (query.trim() === '') {
-        return;
-    }
-    try {
-        const data = await call('mod_playervideo_search_questions', {playervideoid, query, limit: 20});
-        data.questions.forEach((question) => {
-            const item = document.createElement('li');
-            item.className = 'list-group-item list-group-item-action';
-            item.style.cursor = 'pointer';
-            item.innerHTML = `<strong>${escapeHtml(question.type)}</strong> — ${question.preview}`;
-            item.addEventListener('click', () => {
-                selectedQuestionId = question.id;
-                selectedQuestionPreview = question.preview;
-                updateSelectedQuestionDisplay();
-            });
-            results.appendChild(item);
-        });
-    } catch (error) {
-        Notification.exception(error);
-    }
-};
-
-/**
- * Saves the interaction currently configured in the form, for the given question id — shared
- * by "create here" (called automatically right after the question exists) and "pull from
- * bank" (called when the teacher presses the main Save button after picking a search result).
- *
- * @param {number} questionid Question Bank id to place on the timeline.
- * @returns {Promise<void>}
- */
-const saveQuestionInteraction = async(questionid) => {
-    await call('mod_playervideo_save_interaction', {
-        playervideoid,
-        interactionid: parseInt(document.getElementById('playervideo-interactionid').value, 10),
-        timestamp: parseFloat(document.getElementById('playervideo-timestamp').value),
-        type: 'question',
-        questionid,
-        notetext: '',
-        weight: parseFloat(document.getElementById('playervideo-weight').value),
-        'delete': false,
+    body.querySelectorAll('.playervideo-type-card').forEach((card) => {
+        card.addEventListener('click', () => renderEditor(card.dataset.type, null));
     });
-    resetForm();
-    await loadInteractions();
 };
 
 /**
- * Creates a question from the "create here" tab (via mod_playervideo_create_question) and
- * immediately places it on the timeline at the configured timestamp — a single action, not two:
- * a separate "create" step that still required a further "Save" click was confusing enough in
- * practice that a teacher could click "create" repeatedly, each time leaving an unused orphan
- * question behind in the bank, never actually reaching the timeline (see the plugin SCOPE case
- * log for the real report that caught this).
+ * Opens the editor panel for an existing interaction, and seeks the preview video there.
+ *
+ * @param {object} interaction Interaction to edit.
+ */
+const openInteractionForEdit = (interaction) => {
+    activeInteractionId = interaction.id;
+    if (adapter) {
+        adapter.seek(interaction.timestamp);
+    }
+    renderMarkers();
+    renderEditor(interaction.type, interaction);
+};
+
+/**
+ * Deletes the currently-open interaction, after confirming with the teacher.
  *
  * @returns {Promise<void>}
  */
-const createQuestion = async() => {
-    const timestampvalue = document.getElementById('playervideo-timestamp').value;
-    if (timestampvalue.trim() === '' || Number.isNaN(parseFloat(timestampvalue))) {
-        Notification.alert('', await getString('error_timestamprequired', 'mod_playervideo'));
-        return;
-    }
-
-    const qtype = document.getElementById('playervideo-qtype').value;
-    const questiontext = document.getElementById('playervideo-questiontext').value;
-
-    const args = {
-        playervideoid,
-        qtype,
-        questiontext,
-        name: '',
-        single: true,
-        correctanswer: true,
-        answers: [],
-    };
-
-    if (qtype === 'truefalse') {
-        args.correctanswer = document.getElementById('playervideo-tf-true').checked;
-    } else {
-        args.single = document.getElementById('playervideo-single').checked;
-        args.answers = Array.from(document.querySelectorAll('.playervideo-answer-row')).map((row) => ({
-            text: row.querySelector('.playervideo-answer-text').value,
-            correct: row.querySelector('.playervideo-answer-correct').checked,
-        }));
-    }
-
-    const button = document.getElementById('playervideo-create-question-btn');
-    button.disabled = true;
-    try {
-        const result = await call('mod_playervideo_create_question', args);
-        await saveQuestionInteraction(result.questionid);
-        Notification.addNotification({
-            message: await getString('questioncreatedandadded', 'mod_playervideo'),
-            type: 'success',
-        });
-    } catch (error) {
-        Notification.exception(error);
-    } finally {
-        button.disabled = false;
-    }
-};
-
-/**
- * Populates the form with an existing interaction's data, for editing.
- *
- * @param {object} interaction Interaction, as returned by mod_playervideo_get_interactions.
- */
-const populateFormForEdit = (interaction) => {
-    document.getElementById('playervideo-interactionid').value = interaction.id;
-    document.getElementById('playervideo-timestamp').value = interaction.timestamp;
-    document.getElementById('playervideo-type').value = interaction.type;
-    document.getElementById('playervideo-cancel-edit').hidden = false;
-    toggleTypeFields();
-
-    if (interaction.type === 'note') {
-        document.getElementById('playervideo-notetext').value = interaction.notetext;
-    } else {
-        document.getElementById('playervideo-weight').value = interaction.weight;
-        selectedQuestionId = interaction.questionid;
-        selectedQuestionPreview = interaction.questionpreview;
-        updateSelectedQuestionDisplay();
-    }
-
-    document.getElementById('playervideo-form-heading').scrollIntoView({behavior: 'smooth'});
-};
-
-/**
- * Deletes an interaction, after confirming with the teacher.
- *
- * @param {number} interactionid Interaction id.
- * @returns {Promise<void>}
- */
-const deleteInteraction = async(interactionid) => {
+const deleteActiveInteraction = async() => {
     try {
         const [title, body, deletestr] = await Promise.all([
             getString('confirm', 'moodle'),
@@ -330,11 +329,12 @@ const deleteInteraction = async(interactionid) => {
         modal.getRoot().on(ModalEvents.save, async() => {
             try {
                 await call('mod_playervideo_save_interaction', {
-                    playervideoid,
-                    interactionid,
+                    playervideoid: editorData.playervideoid,
+                    interactionid: activeInteractionId,
                     'delete': true,
                 });
                 await loadInteractions();
+                await renderPicker();
             } catch (error) {
                 Notification.exception(error);
             }
@@ -346,91 +346,555 @@ const deleteInteraction = async(interactionid) => {
 };
 
 /**
- * Handles the main form submit: saves (creates or updates) an interaction.
+ * Renders the footer Save (+ Delete when editing) buttons for the panel.
  *
- * @param {SubmitEvent} event Form submit event.
- * @returns {Promise<void>}
+ * @param {Function} onSave Called when Save is pressed.
  */
-const onSubmit = async(event) => {
-    event.preventDefault();
+const renderFooter = (onSave) => {
+    const footer = document.getElementById('playervideo-panel-footer');
+    footer.hidden = false;
+    footer.innerHTML = '';
 
-    const type = document.getElementById('playervideo-type').value;
-    if (type === 'question' && selectedQuestionId === 0) {
-        Notification.alert('', await getString('error_noquestionselected', 'mod_playervideo'));
-        return;
-    }
+    const savebutton = document.createElement('button');
+    savebutton.type = 'button';
+    savebutton.className = 'btn btn-primary';
+    getString('save', 'moodle').then((label) => {
+        savebutton.textContent = label;
+        return null;
+    }).catch(Notification.exception);
+    savebutton.addEventListener('click', async() => {
+        savebutton.disabled = true;
+        try {
+            await onSave();
+        } finally {
+            savebutton.disabled = false;
+        }
+    });
+    footer.appendChild(savebutton);
 
-    const args = {
-        playervideoid,
-        interactionid: parseInt(document.getElementById('playervideo-interactionid').value, 10),
-        timestamp: parseFloat(document.getElementById('playervideo-timestamp').value),
-        type,
-        questionid: type === 'question' ? selectedQuestionId : 0,
-        notetext: type === 'note' ? document.getElementById('playervideo-notetext').value : '',
-        weight: type === 'question' ? parseFloat(document.getElementById('playervideo-weight').value) : 1,
-        'delete': false,
-    };
-
-    try {
-        await call('mod_playervideo_save_interaction', args);
-        resetForm();
-        await loadInteractions();
-    } catch (error) {
-        Notification.exception(error);
+    if (activeInteractionId !== null) {
+        const deletebutton = document.createElement('button');
+        deletebutton.type = 'button';
+        deletebutton.className = 'btn btn-outline-danger';
+        getString('delete', 'moodle').then((label) => {
+            deletebutton.textContent = label;
+            return null;
+        }).catch(Notification.exception);
+        deletebutton.addEventListener('click', deleteActiveInteraction);
+        footer.appendChild(deletebutton);
     }
 };
 
 /**
- * Saves the trim window.
+ * Renders the note editor form.
  *
+ * @param {object|null} existing The interaction being edited, or null when creating new.
  * @returns {Promise<void>}
  */
-const onSaveTrim = async() => {
-    const startvalue = document.getElementById('playervideo-trimstart').value;
-    const endvalue = document.getElementById('playervideo-trimend').value;
+const renderNoteEditor = async(existing) => {
+    const heading = await getString(
+        existing ? 'editmarkerat' : 'addmarkerat',
+        'mod_playervideo',
+        formatTime(existing ? existing.timestamp : pendingTimestamp)
+    );
+    const label = await getString('notetext', 'mod_playervideo');
 
-    try {
-        await call('mod_playervideo_save_trim', {
-            playervideoid,
-            trimstart: startvalue === '' ? null : parseFloat(startvalue),
-            trimend: endvalue === '' ? null : parseFloat(endvalue),
-        });
-        Notification.addNotification({
-            message: await getString('trimsaved', 'mod_playervideo'),
-            type: 'success',
-        });
-    } catch (error) {
-        Notification.exception(error);
-    }
+    const body = document.getElementById('playervideo-panel-body');
+    body.innerHTML = `
+        <div>
+            <h2 class="playervideo-section-title">${escapeHtml(heading)}</h2>
+            <label class="field-label" for="playervideo-note-text">${escapeHtml(label)}</label>
+            <textarea class="form-control" id="playervideo-note-text" rows="3">${existing ? existing.notetext : ''}</textarea>
+        </div>
+    `;
+
+    renderFooter(async() => {
+        const notetext = document.getElementById('playervideo-note-text').value;
+        try {
+            await call('mod_playervideo_save_interaction', {
+                playervideoid: editorData.playervideoid,
+                interactionid: existing ? existing.id : 0,
+                timestamp: existing ? existing.timestamp : pendingTimestamp,
+                type: 'note',
+                notetext,
+            });
+            await loadInteractions();
+            await renderPicker();
+        } catch (error) {
+            Notification.exception(error);
+        }
+    });
 };
+
+/**
+ * Renders the poll editor form.
+ *
+ * @param {object|null} existing The interaction being edited, or null when creating new.
+ * @returns {Promise<void>}
+ */
+const renderPollEditor = async(existing) => {
+    const heading = await getString(
+        existing ? 'editmarkerat' : 'addmarkerat',
+        'mod_playervideo',
+        formatTime(existing ? existing.timestamp : pendingTimestamp)
+    );
+    const [promptlabel, addoptionlabel] = await Promise.all([
+        getString('pollprompt', 'mod_playervideo'),
+        getString('addpolloption', 'mod_playervideo'),
+    ]);
+
+    const body = document.getElementById('playervideo-panel-body');
+    body.innerHTML = `
+        <div>
+            <h2 class="playervideo-section-title">${escapeHtml(heading)}</h2>
+            <label class="field-label" for="playervideo-poll-prompt">${escapeHtml(promptlabel)}</label>
+            <textarea class="form-control mb-2" id="playervideo-poll-prompt" rows="2"
+                >${existing ? existing.notetext : ''}</textarea>
+            <div id="playervideo-poll-options"></div>
+            <button type="button" class="addanswer" id="playervideo-add-poll-option">${escapeHtml(addoptionlabel)}</button>
+        </div>
+    `;
+
+    const optionscontainer = document.getElementById('playervideo-poll-options');
+    const addOptionRow = (text) => {
+        if (optionscontainer.children.length >= 6) {
+            return;
+        }
+        const row = document.createElement('div');
+        row.className = 'input-group mb-1 playervideo-poll-option-row';
+        row.innerHTML = `
+            <input type="text" class="form-control playervideo-poll-option-text" value="${escapeHtml(text)}">
+            <button type="button" class="btn btn-outline-danger" data-action="remove">&times;</button>
+        `;
+        row.querySelector('[data-action="remove"]').addEventListener('click', () => row.remove());
+        optionscontainer.appendChild(row);
+    };
+
+    const existingoptions = existing ? existing.polloptions : [];
+    if (existingoptions.length > 0) {
+        existingoptions.forEach((option) => addOptionRow(option.text));
+    } else {
+        addOptionRow('');
+        addOptionRow('');
+    }
+    document.getElementById('playervideo-add-poll-option').addEventListener('click', () => addOptionRow(''));
+
+    renderFooter(async() => {
+        const notetext = document.getElementById('playervideo-poll-prompt').value;
+        const polloptions = Array.from(document.querySelectorAll('.playervideo-poll-option-text')).map((el) => el.value);
+        try {
+            await call('mod_playervideo_save_interaction', {
+                playervideoid: editorData.playervideoid,
+                interactionid: existing ? existing.id : 0,
+                timestamp: existing ? existing.timestamp : pendingTimestamp,
+                type: 'poll',
+                notetext,
+                polloptions,
+            });
+            await loadInteractions();
+            await renderPicker();
+        } catch (error) {
+            Notification.exception(error);
+        }
+    });
+};
+
+/**
+ * Renders the question editor form: "create here" (multichoice/truefalse) and "pull from
+ * bank" subtabs, sharing the selected-question state between them.
+ *
+ * @param {object|null} existing The interaction being edited, or null when creating new.
+ * @returns {Promise<void>}
+ */
+const renderQuestionEditor = async(existing) => {
+    let selectedQuestionId = existing ? existing.questionid : 0;
+    let selectedQuestionPreview = existing ? existing.questionpreview : '';
+
+    const heading = await getString(
+        existing ? 'editmarkerat' : 'addmarkerat',
+        'mod_playervideo',
+        formatTime(existing ? existing.timestamp : pendingTimestamp)
+    );
+    const [createherelabel, pullfrombanklabel, weightlabel, hintlabel] = await Promise.all([
+        getString('createhere', 'mod_playervideo'),
+        getString('pullfrombank', 'mod_playervideo'),
+        getString('interactionweight', 'mod_playervideo'),
+        getString('selectedquestionhint', 'mod_playervideo'),
+    ]);
+
+    const body = document.getElementById('playervideo-panel-body');
+    body.innerHTML = `
+        <div>
+            <h2 class="playervideo-section-title">${escapeHtml(heading)}</h2>
+            <label class="field-label" for="playervideo-weight">${escapeHtml(weightlabel)}</label>
+            <input type="number" min="0" step="0.5" class="form-control mb-2" id="playervideo-weight"
+                value="${existing ? existing.weight : 1}">
+            <div class="subtabs" role="tablist">
+                <button type="button" role="tab" aria-selected="true"
+                    id="playervideo-tab-create">${escapeHtml(createherelabel)}</button>
+                <button type="button" role="tab" aria-selected="false"
+                    id="playervideo-tab-bank">${escapeHtml(pullfrombanklabel)}</button>
+            </div>
+            <div id="playervideo-question-subpanel" class="mt-2"></div>
+            <div class="alert alert-info mt-2" id="playervideo-selected-question" hidden></div>
+        </div>
+    `;
+
+    const updateSelectedQuestionDisplay = () => {
+        const el = document.getElementById('playervideo-selected-question');
+        if (selectedQuestionId > 0) {
+            el.hidden = false;
+            el.innerHTML = `<strong>${escapeHtml(hintlabel)}</strong> ${selectedQuestionPreview}`;
+        } else {
+            el.hidden = true;
+            el.innerHTML = '';
+        }
+    };
+
+    const renderCreateSubpanel = async() => {
+        const [qtypelabel, texttlabel, mclabel, tflabel, singlelabel, addanswerlabel, createlabel] = await Promise.all([
+            getString('questiontype', 'mod_playervideo'),
+            getString('questiontext', 'mod_playervideo'),
+            getString('qtypemultichoice', 'mod_playervideo'),
+            getString('qtypetruefalse', 'mod_playervideo'),
+            getString('singleanswer', 'mod_playervideo'),
+            getString('addanswer', 'mod_playervideo'),
+            getString('createandadd', 'mod_playervideo'),
+        ]);
+        const [truelabel, falselabel] = await Promise.all([
+            getString('true', 'mod_playervideo'),
+            getString('false', 'mod_playervideo'),
+        ]);
+        const sub = document.getElementById('playervideo-question-subpanel');
+        sub.innerHTML = `
+            <label class="field-label" for="playervideo-qtype">${escapeHtml(qtypelabel)}</label>
+            <select class="form-select mb-2" id="playervideo-qtype">
+                <option value="multichoice">${escapeHtml(mclabel)}</option>
+                <option value="truefalse">${escapeHtml(tflabel)}</option>
+            </select>
+            <label class="field-label" for="playervideo-questiontext">${escapeHtml(texttlabel)}</label>
+            <textarea class="form-control mb-2" id="playervideo-questiontext" rows="2"></textarea>
+            <div id="playervideo-multichoice-fields">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="playervideo-single" checked>
+                    <label class="form-check-label" for="playervideo-single">${escapeHtml(singlelabel)}</label>
+                </div>
+                <div id="playervideo-answers"></div>
+                <button type="button" class="addanswer" id="playervideo-add-answer">${escapeHtml(addanswerlabel)}</button>
+            </div>
+            <div id="playervideo-truefalse-fields" hidden>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="playervideo-tf" id="playervideo-truefalse-correct" checked>
+                    <label class="form-check-label" for="playervideo-truefalse-correct">${escapeHtml(truelabel)}</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="playervideo-tf" id="playervideo-truefalse-incorrect">
+                    <label class="form-check-label" for="playervideo-truefalse-incorrect">${escapeHtml(falselabel)}</label>
+                </div>
+            </div>
+            <button type="button" class="btn btn-secondary mt-2"
+                id="playervideo-create-question-btn">${escapeHtml(createlabel)}</button>
+        `;
+
+        const answers = document.getElementById('playervideo-answers');
+        const addAnswerRow = () => {
+            const row = document.createElement('div');
+            row.className = 'playervideo-answer-row mb-1';
+            row.innerHTML = `
+                <input type="text" class="form-control playervideo-answer-text">
+                <div class="playervideo-correctness">
+                    <button type="button" class="playervideo-correct" aria-pressed="false">&#10003;</button>
+                </div>
+                <button type="button" class="answer-remove" data-action="remove">&times;</button>
+            `;
+            row.querySelector('.playervideo-correct').addEventListener('click', function() {
+                const ispressed = this.getAttribute('aria-pressed') === 'true';
+                this.setAttribute('aria-pressed', ispressed ? 'false' : 'true');
+            });
+            row.querySelector('[data-action="remove"]').addEventListener('click', () => row.remove());
+            answers.appendChild(row);
+        };
+        addAnswerRow();
+        addAnswerRow();
+        document.getElementById('playervideo-add-answer').addEventListener('click', addAnswerRow);
+
+        document.getElementById('playervideo-qtype').addEventListener('change', (event) => {
+            const qtype = event.target.value;
+            document.getElementById('playervideo-multichoice-fields').hidden = qtype !== 'multichoice';
+            document.getElementById('playervideo-truefalse-fields').hidden = qtype !== 'truefalse';
+        });
+
+        document.getElementById('playervideo-create-question-btn').addEventListener('click', async(event) => {
+            const qtype = document.getElementById('playervideo-qtype').value;
+            const questiontext = document.getElementById('playervideo-questiontext').value;
+            const args = {
+                playervideoid: editorData.playervideoid,
+                qtype,
+                questiontext,
+                name: '',
+                single: true,
+                correctanswer: true,
+                answers: [],
+            };
+            if (qtype === 'truefalse') {
+                args.correctanswer = document.getElementById('playervideo-truefalse-correct')?.checked ?? true;
+            } else {
+                args.single = document.getElementById('playervideo-single').checked;
+                args.answers = Array.from(document.querySelectorAll('.playervideo-answer-row')).map((row) => ({
+                    text: row.querySelector('.playervideo-answer-text').value,
+                    correct: row.querySelector('.playervideo-correct').getAttribute('aria-pressed') === 'true',
+                }));
+            }
+
+            const button = event.currentTarget;
+            button.disabled = true;
+            try {
+                const result = await call('mod_playervideo_create_question', args);
+                const weight = parseFloat(document.getElementById('playervideo-weight').value) || 1;
+                await call('mod_playervideo_save_interaction', {
+                    playervideoid: editorData.playervideoid,
+                    interactionid: existing ? existing.id : 0,
+                    timestamp: existing ? existing.timestamp : pendingTimestamp,
+                    type: 'question',
+                    questionid: result.questionid,
+                    weight,
+                });
+                Notification.addNotification({
+                    message: await getString('questioncreatedandadded', 'mod_playervideo'),
+                    type: 'success',
+                });
+                await loadInteractions();
+                await renderPicker();
+            } catch (error) {
+                Notification.exception(error);
+            } finally {
+                button.disabled = false;
+            }
+        });
+    };
+
+    const renderBankSubpanel = () => {
+        const sub = document.getElementById('playervideo-question-subpanel');
+        sub.innerHTML = `
+            <input type="text" class="form-control mb-2" id="playervideo-search" placeholder="&hellip;">
+            <ul class="list-group" id="playervideo-search-results"></ul>
+        `;
+        let searchtimeout = null;
+        document.getElementById('playervideo-search').addEventListener('input', (event) => {
+            window.clearTimeout(searchtimeout);
+            const query = event.target.value;
+            searchtimeout = window.setTimeout(async() => {
+                const results = document.getElementById('playervideo-search-results');
+                results.innerHTML = '';
+                if (query.trim() === '') {
+                    return;
+                }
+                try {
+                    const data = await call('mod_playervideo_search_questions', {
+                        playervideoid: editorData.playervideoid,
+                        query,
+                        limit: 20,
+                    });
+                    data.questions.forEach((question) => {
+                        const item = document.createElement('li');
+                        item.className = 'list-group-item list-group-item-action';
+                        item.style.cursor = 'pointer';
+                        item.innerHTML = `<strong>${escapeHtml(question.type)}</strong> — ${question.preview}`;
+                        item.addEventListener('click', () => {
+                            selectedQuestionId = question.id;
+                            selectedQuestionPreview = question.preview;
+                            updateSelectedQuestionDisplay();
+                        });
+                        results.appendChild(item);
+                    });
+                } catch (error) {
+                    Notification.exception(error);
+                }
+            }, 300);
+        });
+    };
+
+    document.getElementById('playervideo-tab-create').addEventListener('click', function() {
+        this.setAttribute('aria-selected', 'true');
+        document.getElementById('playervideo-tab-bank').setAttribute('aria-selected', 'false');
+        renderCreateSubpanel();
+    });
+    document.getElementById('playervideo-tab-bank').addEventListener('click', function() {
+        this.setAttribute('aria-selected', 'true');
+        document.getElementById('playervideo-tab-create').setAttribute('aria-selected', 'false');
+        renderBankSubpanel();
+    });
+
+    await renderCreateSubpanel();
+    updateSelectedQuestionDisplay();
+
+    renderFooter(async() => {
+        if (selectedQuestionId === 0) {
+            Notification.alert('', await getString('error_noquestionselected', 'mod_playervideo'));
+            return;
+        }
+        const weight = parseFloat(document.getElementById('playervideo-weight').value) || 1;
+        try {
+            await call('mod_playervideo_save_interaction', {
+                playervideoid: editorData.playervideoid,
+                interactionid: existing ? existing.id : 0,
+                timestamp: existing ? existing.timestamp : pendingTimestamp,
+                type: 'question',
+                questionid: selectedQuestionId,
+                weight,
+            });
+            await loadInteractions();
+            await renderPicker();
+        } catch (error) {
+            Notification.exception(error);
+        }
+    });
+};
+
+/**
+ * Dispatches to the right editor form for the given type.
+ *
+ * @param {string} type 'note' | 'question' | 'poll'.
+ * @param {object|null} existing The interaction being edited, or null when creating new.
+ * @returns {Promise<void>}
+ */
+const renderEditor = (type, existing) => {
+    if (type === 'note') {
+        return renderNoteEditor(existing);
+    }
+    if (type === 'poll') {
+        return renderPollEditor(existing);
+    }
+    return renderQuestionEditor(existing);
+};
+
+/**
+ * Computes the video timestamp for a click at the given clientX on the timeline element.
+ *
+ * @param {number} clientx Pointer clientX.
+ * @returns {number} Timestamp, in seconds.
+ */
+const timestampForClientX = (clientx) => {
+    const rect = document.getElementById('playervideo-timeline').getBoundingClientRect();
+    const percent = ((clientx - rect.left) / rect.width) * 100;
+    return timeForPercent(percent);
+};
+
+/**
+ * Wires clicking empty timeline space to open the "add a new marker here" picker.
+ */
+const initTimelineClick = () => {
+    document.getElementById('playervideo-timeline').addEventListener('click', (event) => {
+        if (event.target.closest('.playervideo-marker, .playervideo-trim-handle')) {
+            return;
+        }
+        pendingTimestamp = timestampForClientX(event.clientX);
+        renderPicker();
+    });
+
+    document.getElementById('playervideo-add-here-btn').addEventListener('click', async() => {
+        if (adapter) {
+            pendingTimestamp = await adapter.getCurrentTime();
+        }
+        renderPicker();
+    });
+};
+
+/**
+ * Wires mouse dragging and keyboard nudging for one trim handle.
+ *
+ * @param {string} elementid Handle element id.
+ * @param {Function} getvalue Returns the handle's current value (trimstart or trimend).
+ * @param {Function} setvalue Sets the handle's new value.
+ */
+const initTrimHandle = (elementid, getvalue, setvalue) => {
+    const handle = document.getElementById(elementid);
+
+    handle.addEventListener('mousedown', (downevent) => {
+        downevent.preventDefault();
+        const startvalue = getvalue();
+
+        const onMove = (moveevent) => {
+            const timeline = document.getElementById('playervideo-timeline');
+            const rect = timeline.getBoundingClientRect();
+            const percent = ((moveevent.clientX - rect.left) / rect.width) * 100;
+            setvalue(timeForPercent(percent));
+            renderTrim();
+        };
+
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (Math.abs(getvalue() - startvalue) > TRIM_DRAG_EPSILON) {
+                saveTrim();
+            }
+        };
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+
+    handle.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+            return;
+        }
+        event.preventDefault();
+        const step = (event.shiftKey ? 5 : 1) * TRIM_KEY_STEP;
+        const delta = event.key === 'ArrowRight' ? step : -step;
+        setvalue(Math.max(0, Math.min(duration, getvalue() + delta)));
+        renderTrim();
+        saveTrim();
+    });
+};
+
+/**
+ * Reads the editor data island embedded server-side by interactions.php.
+ *
+ * @returns {object}
+ */
+const readEditorData = () => JSON.parse(document.getElementById('playervideo-editor-data').textContent);
 
 /**
  * Initialises the timeline management screen.
- *
- * @param {number} instanceid PlayerVideo instance id.
  */
-export const init = (instanceid) => {
-    playervideoid = instanceid;
+export const init = async() => {
+    editorData = readEditorData();
+    trimstart = editorData.trimstart;
+    trimend = editorData.trimend;
 
-    document.getElementById('playervideo-type').addEventListener('change', toggleTypeFields);
-    document.getElementById('playervideo-qtype').addEventListener('change', () => {
-        const qtype = document.getElementById('playervideo-qtype').value;
-        document.getElementById('playervideo-multichoice-fields').hidden = qtype !== 'multichoice';
-        document.getElementById('playervideo-truefalse-fields').hidden = qtype !== 'truefalse';
-    });
-    document.getElementById('playervideo-add-answer').addEventListener('click', addAnswerRow);
-    document.getElementById('playervideo-create-question-btn').addEventListener('click', createQuestion);
-    document.getElementById('playervideo-save-trim').addEventListener('click', onSaveTrim);
-    document.getElementById('playervideo-interaction-form').addEventListener('submit', onSubmit);
-    document.getElementById('playervideo-cancel-edit').addEventListener('click', resetForm);
+    try {
+        adapter = await createAdapterForSource();
+        await adapter.ready();
+        duration = await adapter.getDuration();
+    } catch (error) {
+        Notification.exception(error);
+        duration = 0;
+    }
 
-    let searchTimeout = null;
-    document.getElementById('playervideo-search').addEventListener('input', (event) => {
-        clearTimeout(searchTimeout);
-        const query = event.target.value;
-        searchTimeout = setTimeout(() => searchQuestions(query), 300);
-    });
+    document.getElementById('playervideo-ruler-end').textContent = formatTime(duration);
 
-    resetForm();
-    loadInteractions();
+    if (adapter) {
+        adapter.onTimeUpdate((time) => {
+            document.getElementById('playervideo-playhead').style.left = `${percentForTime(time)}%`;
+        });
+    }
+
+    initTimelineClick();
+    initTrimHandle(
+        'playervideo-trim-handle-start',
+        () => trimstart ?? 0,
+        (value) => {
+            trimstart = value;
+        }
+    );
+    initTrimHandle(
+        'playervideo-trim-handle-end',
+        () => trimend ?? duration,
+        (value) => {
+            trimend = value;
+        }
+    );
+
+    await loadInteractions();
+    await renderPicker();
 };

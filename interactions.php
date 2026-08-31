@@ -60,14 +60,24 @@ if ($instance->videotype === 'html5') {
 
 $embedurl = video_source::get_embed_url($instance->videotype, $instance->videourl, $fileurl);
 
-$PAGE->requires->js_call_amd('mod_playervideo/interactions_editor', 'init', [(int) $instance->id]);
+$editordata = [
+    'playervideoid' => (int) $instance->id,
+    'videotype' => $instance->videotype,
+    'embedurl' => $embedurl !== null ? $embedurl->out(false) : null,
+    'trimstart' => $instance->trimstart !== null ? (float) $instance->trimstart : null,
+    'trimend' => $instance->trimend !== null ? (float) $instance->trimend : null,
+];
+
+$PAGE->requires->js_call_amd('mod_playervideo/interactions_editor', 'init', []);
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('manageinteractions', 'mod_playervideo'));
+echo html_writer::tag(
+    'script',
+    json_encode($editordata, JSON_HEX_TAG | JSON_HEX_AMP),
+    ['type' => 'application/json', 'id' => 'playervideo-editor-data']
+);
 echo $OUTPUT->render_from_template('mod_playervideo/interactions_editor', [
-    'playervideoid' => (int) $instance->id,
-    'embedurl' => $embedurl !== null ? $embedurl->out(false) : null,
-    'embedvideo' => $embedurl !== null && $instance->videotype === 'html5',
-    'embediframe' => $embedurl !== null && $instance->videotype !== 'html5',
+    'noembed' => $embedurl === null,
 ]);
 echo $OUTPUT->footer();
