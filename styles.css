@@ -27,7 +27,9 @@
  * video embed that cm_info_dynamic() renders on the course page itself (showinline), a page
  * whose body carries .path-course-view, never .path-mod-playervideo — a body-path selector
  * would simply never match there. Collision risk is kept low instead by qualifying the
- * selector with the two tag names it is ever applied to.
+ * selector with the two tag names it is ever applied to. See CLAUDE.md § CSS exception for
+ * content rendered outside the plugin's own page; case log: moodle-lessons.md § CSS scoping —
+ * content rendered outside the plugin's own page.
  */
 iframe.ph-video-embed,
 video.ph-video-embed {
