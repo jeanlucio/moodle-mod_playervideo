@@ -1,0 +1,14 @@
+# Node dependencies (Grunt)
+node_modules/
+.grunt/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+SCOPE.md
+.plans
