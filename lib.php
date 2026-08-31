@@ -467,3 +467,34 @@ function playervideo_pluginfile(
 function playervideo_questions_in_use(array $questionids): bool {
     return question_service::has_questions_in_use($questionids);
 }
+
+/**
+ * Adds "Manage interactions" to the activity administration menu, for teachers.
+ *
+ * Discovered automatically by core (settings_navigation::load_module_settings(), which calls
+ * "{$cm->modname}_extend_settings_navigation" by name) — without this, interactions.php (the
+ * timeline editor, built in Fase 3a) has no link pointing to it anywhere in the UI.
+ *
+ * @param settings_navigation $settings The settings navigation object.
+ * @param navigation_node $playervideonode The node to add children to.
+ * @return void
+ */
+function playervideo_extend_settings_navigation(
+    settings_navigation $settings,
+    navigation_node $playervideonode
+): void {
+    $cm = $settings->get_page()->cm;
+
+    if (!has_capability('mod/playervideo:manage', $cm->context)) {
+        return;
+    }
+
+    $url = new moodle_url('/mod/playervideo/interactions.php', ['id' => $cm->id]);
+    $playervideonode->add(
+        get_string('manageinteractions', 'mod_playervideo'),
+        $url,
+        navigation_node::TYPE_SETTING,
+        null,
+        'mod_playervideo_manageinteractions'
+    );
+}

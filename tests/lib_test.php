@@ -44,6 +44,7 @@ use mod_playervideo\local\attempt_manager;
  * @covers ::playervideo_get_coursemodule_info
  * @covers ::playervideo_questions_in_use
  * @covers ::playervideo_supports
+ * @covers ::playervideo_extend_settings_navigation
  */
 final class lib_test extends \advanced_testcase {
     #[\Override]
@@ -302,5 +303,70 @@ final class lib_test extends \advanced_testcase {
         $grades = grade_get_grades($course->id, 'mod', 'playervideo', $instance->id, $userid);
         $usergrade = $grades->items[0]->grades[$userid];
         $this->assertSame(90.0, (float) $usergrade->grade);
+    }
+
+    /**
+     * Builds a real settings_navigation object for $cm, the only way to exercise
+     * playervideo_extend_settings_navigation() as core actually calls it.
+     *
+     * @param \stdClass $course Course record.
+     * @param \stdClass $instance Activity instance (must have a cmid property).
+     * @return \settings_navigation
+     */
+    private function build_settings_navigation(\stdClass $course, \stdClass $instance): \settings_navigation {
+        global $PAGE;
+
+        $cm = get_coursemodule_from_instance('playervideo', $instance->id, $course->id, false, MUST_EXIST);
+        $PAGE->set_cm($cm, $course);
+        $PAGE->set_url('/mod/playervideo/view.php', ['id' => $cm->id]);
+
+        return new \settings_navigation($PAGE);
+    }
+
+    /**
+     * Tests that a teacher (mod/playervideo:manage) gets a "Manage interactions" node pointing
+     * at interactions.php — without this, the timeline editor built in Fase 3a has no link
+     * anywhere in the UI (found by the plugin's author after Fase 3b shipped).
+     *
+     * @return void
+     */
+    public function test_extend_settings_navigation_adds_link_for_manager(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->create_instance($course->id);
+        $teacher = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($teacher->id, $course->id, 'editingteacher');
+        $this->setUser($teacher);
+
+        $settingsnav = $this->build_settings_navigation($course, $instance);
+        $node = new \navigation_node('PlayerVideo');
+
+        playervideo_extend_settings_navigation($settingsnav, $node);
+
+        $added = $node->get('mod_playervideo_manageinteractions');
+        $this->assertNotFalse($added);
+        $this->assertStringContainsString(
+            "interactions.php?id={$settingsnav->get_page()->cm->id}",
+            $added->action->out(false)
+        );
+    }
+
+    /**
+     * Tests that a student (no mod/playervideo:manage) gets no such node.
+     *
+     * @return void
+     */
+    public function test_extend_settings_navigation_skips_students(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->create_instance($course->id);
+        $student = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($student->id, $course->id, 'student');
+        $this->setUser($student);
+
+        $settingsnav = $this->build_settings_navigation($course, $instance);
+        $node = new \navigation_node('PlayerVideo');
+
+        playervideo_extend_settings_navigation($settingsnav, $node);
+
+        $this->assertFalse($node->get('mod_playervideo_manageinteractions'));
     }
 }
