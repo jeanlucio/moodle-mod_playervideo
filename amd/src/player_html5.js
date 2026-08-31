@@ -19,6 +19,9 @@
  * uniformly: ready(), play(), pause(), seek(seconds), getCurrentTime(), getDuration(),
  * onTimeUpdate(callback), onEnded(callback).
  *
+ * Native controls are left off: the plugin's own timeline bar is the only scrub/play surface,
+ * so a second, redundant progress bar never stacks under the browser's own.
+ *
  * @module     mod_playervideo/player_html5
  * @copyright  2026 Jean Lúcio
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -37,7 +40,6 @@ export const createPlayer = async(targetId, embedUrl) => {
     const video = document.createElement('video');
     video.id = targetId;
     video.className = 'ph-video-embed';
-    video.controls = true;
     video.src = embedUrl;
     target.replaceWith(video);
 

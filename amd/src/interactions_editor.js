@@ -64,6 +64,9 @@ let activeInteractionId = null;
 /** @var {number} Timestamp (seconds) a new marker would be placed at. */
 let pendingTimestamp = 0;
 
+/** @var {boolean} Whether the video is currently playing, tracked locally to drive the play/pause button. */
+let isPlaying = false;
+
 /**
  * Calls a single mod_playervideo Web Service method.
  *
@@ -781,15 +784,51 @@ const timestampForClientX = (clientx) => {
 };
 
 /**
- * Wires clicking empty timeline space to open the "add a new marker here" picker.
+ * Updates the play/pause button's icon and label to reflect the given state.
+ *
+ * @param {boolean} playing Whether the video is now playing.
+ * @returns {Promise<void>}
+ */
+const setPlayingState = async(playing) => {
+    isPlaying = playing;
+    const button = document.getElementById('playervideo-playpause-btn');
+    button.classList.toggle('is-playing', playing);
+    button.setAttribute('aria-label', await getString(playing ? 'pause' : 'play', 'mod_playervideo'));
+};
+
+/**
+ * Toggles play/pause on the active adapter — the only play/pause control now that native
+ * player chrome is hidden (see player_youtube/vimeo/html5).
+ *
+ * @returns {Promise<void>}
+ */
+const togglePlayPause = async() => {
+    if (!adapter) {
+        return;
+    }
+    if (isPlaying) {
+        adapter.pause();
+        await setPlayingState(false);
+    } else {
+        adapter.play();
+        await setPlayingState(true);
+    }
+};
+
+/**
+ * Wires clicking empty timeline space to seek the video there — the timeline bar is the only
+ * scrub surface now that the native player controls are hidden (see player_youtube/vimeo/html5).
+ * A new marker is placed at the current position via the separate "Add here" button instead of
+ * by clicking the bar, so a plain click can mean one thing only.
  */
 const initTimelineClick = () => {
     document.getElementById('playervideo-timeline').addEventListener('click', (event) => {
-        if (event.target.closest('.playervideo-marker, .playervideo-trim-handle')) {
+        if (event.target.closest('.playervideo-marker, .playervideo-trim-handle') || !adapter) {
             return;
         }
-        pendingTimestamp = timestampForClientX(event.clientX);
-        renderPicker();
+        const time = timestampForClientX(event.clientX);
+        adapter.seek(time);
+        document.getElementById('playervideo-playhead').style.left = `${percentForTime(time)}%`;
     });
 
     document.getElementById('playervideo-add-here-btn').addEventListener('click', async() => {
@@ -798,6 +837,8 @@ const initTimelineClick = () => {
         }
         renderPicker();
     });
+
+    document.getElementById('playervideo-playpause-btn').addEventListener('click', togglePlayPause);
 };
 
 /**
@@ -872,6 +913,7 @@ export const init = async() => {
     }
 
     document.getElementById('playervideo-ruler-end').textContent = formatTime(duration);
+    await setPlayingState(false);
 
     if (adapter) {
         adapter.onTimeUpdate((time) => {

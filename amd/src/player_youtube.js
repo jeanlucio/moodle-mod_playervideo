@@ -22,6 +22,10 @@
  * started once the player fires its own onReady — the same technique mod_interactivevideo
  * uses (confirmed reading its amd/src/player/yt.js during the plugin's research phase).
  *
+ * Native controls are disabled (playerVars.controls = 0): the plugin's own timeline bar is the
+ * only scrub/play surface, so a second, redundant progress bar never stacks under YouTube's own.
+ * disablekb keeps arrow-key seeking from bypassing that same bar's anti-skip gating.
+ *
  * @module     mod_playervideo/player_youtube
  * @copyright  2026 Jean Lúcio
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -98,7 +102,7 @@ export const createPlayer = async(targetId, embedUrl) => {
 
     const ytplayer = new window.YT.Player(targetId, {
         videoId,
-        playerVars: {playsinline: 1},
+        playerVars: {playsinline: 1, controls: 0, disablekb: 1},
         events: {
             onReady: () => {
                 pollTimer = window.setInterval(() => {
@@ -119,7 +123,44 @@ export const createPlayer = async(targetId, embedUrl) => {
         ready: () => readyPromise,
         play: () => ytplayer.playVideo(),
         pause: () => ytplayer.pauseVideo(),
-        seek: (seconds) => ytplayer.seekTo(seconds, true),
+        /*
+         * Calling seekTo() is a documented no-op while the player is still UNSTARTED/CUED (never
+         * played even once) — getCurrentTime() keeps reporting 0 afterwards, silently. Calling
+         * playVideo() immediately before it is not enough on its own: the player only actually
+         * honours the seek once it has genuinely reached the PLAYING state, which happens
+         * asynchronously (buffering), not the instant playVideo() is called. So this waits for
+         * the real onStateChange -> PLAYING event before seeking, then pauses again to land on
+         * the sought frame without leaving playback running. Once the player has played at least
+         * once, seekTo() alone works and this whole branch is skipped.
+         *
+         * The `handled` guard exists because removeEventListener() is itself an async postMessage
+         * call across the iframe boundary: it does not necessarily take effect before a second
+         * onStateChange:PLAYING event (fired by our own seekTo() call re-buffering) reaches this
+         * same listener, which would otherwise replay the whole seek+pause sequence a second time
+         * on the next unrelated play() call.
+         */
+        seek: (seconds) => new Promise((resolve) => {
+            const state = ytplayer.getPlayerState();
+            const neverstarted = state === window.YT.PlayerState.UNSTARTED || state === window.YT.PlayerState.CUED;
+            if (!neverstarted) {
+                ytplayer.seekTo(seconds, true);
+                resolve();
+                return;
+            }
+            let handled = false;
+            const onPlaying = (event) => {
+                if (handled || event.data !== window.YT.PlayerState.PLAYING) {
+                    return;
+                }
+                handled = true;
+                ytplayer.removeEventListener('onStateChange', onPlaying);
+                ytplayer.seekTo(seconds, true);
+                ytplayer.pauseVideo();
+                resolve();
+            };
+            ytplayer.addEventListener('onStateChange', onPlaying);
+            ytplayer.playVideo();
+        }),
         getCurrentTime: () => Promise.resolve(ytplayer.getCurrentTime()),
         getDuration: () => Promise.resolve(ytplayer.getDuration()),
         onTimeUpdate: (callback) => timeUpdateCallbacks.push(callback),

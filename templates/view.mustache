@@ -74,8 +74,28 @@
 
     <div id="playervideo-player-screen" hidden>
         <div id="playervideo-announcer" class="visually-hidden" aria-live="polite"></div>
-        <div id="playervideo-video-wrapper" class="mb-3">
-            <div id="playervideo-target" class="ph-video-embed"></div>
+        <div class="playervideo-stage mb-3">
+            <div class="playervideo-video-wrapper">
+                <div id="playervideo-target" class="ph-video-embed"></div>
+            </div>
+            <div class="playervideo-timeline-wrap">
+                <div class="playervideo-timeline-ruler mono" aria-hidden="true">
+                    <span id="playervideo-ruler-start">0:00</span>
+                    <span id="playervideo-ruler-end">&nbsp;</span>
+                </div>
+                <div class="playervideo-timeline" id="playervideo-timeline" role="group"
+                    aria-label="{{#str}}timelinelabel, mod_playervideo{{/str}}">
+                    <div class="playervideo-timeline-track"></div>
+                    <div class="playervideo-playhead" id="playervideo-playhead"></div>
+                    <div id="playervideo-markers"></div>
+                </div>
+            </div>
+            <div class="playervideo-stage-toolbar">
+                <button type="button" class="playervideo-playpause-btn" id="playervideo-playpause-btn"
+                    aria-label="{{#str}}play, mod_playervideo{{/str}}">
+                    <span class="playervideo-playpause-icon" aria-hidden="true"></span>
+                </button>
+            </div>
         </div>
         <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="playervideo-finish-btn">
             {{#str}}finishattempt, mod_playervideo{{/str}}

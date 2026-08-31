@@ -64,6 +64,15 @@ let heartbeatTimer = null;
 /** @var {boolean} Guards against handleEnded() firing twice (native ended + trim end). */
 let attemptFinishing = false;
 
+/** @var {number} Video duration, in seconds, once known — drives the timeline bar's math. */
+let duration = 0;
+
+/** @var {boolean} Whether the video is currently playing, tracked locally to drive the play/pause button. */
+let isPlaying = false;
+
+/** @var {boolean} Whether the timeline's click-to-seek should ignore anti-skip (review mode). */
+let seekUnrestricted = false;
+
 /**
  * Announces a short status change to screen-reader users via the polite aria-live region,
  * without stealing visual focus (see the plugin SCOPE, a11y requirements).
@@ -111,6 +120,121 @@ const showError = async(error) => {
  * @returns {Promise<object>}
  */
 const call = (methodname, args) => Ajax.call([{methodname, args}])[0];
+
+/**
+ * Formats a number of seconds as m:ss, for the timeline ruler.
+ *
+ * @param {number} seconds Seconds.
+ * @returns {string}
+ */
+const formatTime = (seconds) => {
+    const safe = Math.max(0, Math.round(seconds || 0));
+    const minutes = Math.floor(safe / 60);
+    const secs = (safe % 60).toString().padStart(2, '0');
+    return `${minutes}:${secs}`;
+};
+
+/**
+ * Converts a video position to a percentage along the timeline bar.
+ *
+ * @param {number} seconds Video position, in seconds.
+ * @returns {number}
+ */
+const percentForTime = (seconds) => {
+    if (duration <= 0) {
+        return 0;
+    }
+    return Math.min(100, Math.max(0, (seconds / duration) * 100));
+};
+
+/**
+ * Converts a click's clientX on the timeline bar to a video position, in seconds.
+ *
+ * @param {number} clientx Mouse event clientX.
+ * @returns {number}
+ */
+const timestampForClientX = (clientx) => {
+    const rect = document.getElementById('playervideo-timeline').getBoundingClientRect();
+    const percent = ((clientx - rect.left) / rect.width) * 100;
+    return (Math.min(100, Math.max(0, percent)) / 100) * duration;
+};
+
+/**
+ * Renders every activity interaction as a non-interactive marker on the timeline — a preview of
+ * what's ahead, matching the EdPuzzle convention the plugin's design was aligned on with the
+ * author. Unlike the teacher editor's markers, these never open anything on click.
+ */
+const renderMarkers = () => {
+    const container = document.getElementById('playervideo-markers');
+    container.innerHTML = '';
+    playerData.interactions.forEach((interaction) => {
+        const marker = document.createElement('div');
+        marker.className = `playervideo-marker playervideo-marker-readonly playervideo-marker-${interaction.type}`;
+        marker.style.left = `${percentForTime(interaction.timestamp)}%`;
+        container.appendChild(marker);
+    });
+};
+
+/**
+ * Updates the play/pause button's icon and label to reflect the given state.
+ *
+ * @param {boolean} playing Whether the video is now playing.
+ * @returns {Promise<void>}
+ */
+const setPlayingState = async(playing) => {
+    isPlaying = playing;
+    const button = document.getElementById('playervideo-playpause-btn');
+    button.classList.toggle('is-playing', playing);
+    button.setAttribute('aria-label', await getString(playing ? 'pause' : 'play', 'mod_playervideo'));
+};
+
+/**
+ * Toggles play/pause on the active adapter — the only play/pause control now that native
+ * player chrome is hidden (see player_youtube/vimeo/html5).
+ *
+ * @returns {Promise<void>}
+ */
+const togglePlayPause = async() => {
+    if (!adapter) {
+        return;
+    }
+    if (isPlaying) {
+        adapter.pause();
+        await setPlayingState(false);
+    } else {
+        adapter.play();
+        await setPlayingState(true);
+    }
+};
+
+/**
+ * Wires the timeline bar's click-to-seek and the play/pause button. Shared by the live attempt
+ * (gated by the anti-skip tracker) and review mode (unrestricted — the attempt is already over).
+ *
+ * @returns {Promise<void>}
+ */
+const initTimelineControls = async() => {
+    duration = await adapter.getDuration();
+    document.getElementById('playervideo-ruler-end').textContent = formatTime(duration);
+    renderMarkers();
+    await setPlayingState(false);
+
+    adapter.onTimeUpdate((time) => {
+        document.getElementById('playervideo-playhead').style.left = `${percentForTime(time)}%`;
+    });
+
+    document.getElementById('playervideo-timeline').addEventListener('click', async(event) => {
+        const target = timestampForClientX(event.clientX);
+        if (!seekUnrestricted && tracker && !tracker.canSeekTo(target, playerData.allowseekahead)) {
+            announce(await getString('error_seekaheadblocked', 'mod_playervideo'));
+            return;
+        }
+        adapter.seek(target);
+        document.getElementById('playervideo-playhead').style.left = `${percentForTime(target)}%`;
+    });
+
+    document.getElementById('playervideo-playpause-btn').addEventListener('click', togglePlayPause);
+};
 
 /**
  * Resolves one review row's status (plus, for an answered multichoice-type row, whether it
@@ -208,6 +332,8 @@ const startReview = async(reviewattemptid) => {
         showScreen('player');
         adapter = await createAdapterForSource();
         await adapter.ready();
+        seekUnrestricted = true;
+        await initTimelineControls();
 
         for (const row of data.interactions) {
             adapter.seek(row.timestamp);
@@ -328,6 +454,7 @@ const finishAttempt = async(nativeended) => {
 
     window.clearInterval(heartbeatTimer);
     adapter.pause();
+    await setPlayingState(false);
     await heartbeat(nativeended);
     await showSummary();
 };
@@ -369,6 +496,7 @@ const resumeAfterInteraction = () => {
     currentInteraction = null;
     document.getElementById('playervideo-target').focus?.();
     adapter.play();
+    setPlayingState(true);
 };
 
 /**
@@ -534,6 +662,7 @@ const submitPollVote = async() => {
  */
 const pauseForInteraction = async(interaction) => {
     adapter.pause();
+    await setPlayingState(false);
     currentInteraction = interaction;
     const overlay = document.getElementById('playervideo-interaction-overlay');
 
@@ -654,11 +783,13 @@ const startOrResumeAttempt = async() => {
         attemptNumber = started.attemptnumber;
         treatedInteractionIds = new Set(started.treatedinteractionids);
         attemptFinishing = false;
+        seekUnrestricted = false;
 
         showScreen('player');
         adapter = await createAdapterForSource();
         tracker = createTracker(JSON.parse(playerData.segments));
         await adapter.ready();
+        await initTimelineControls();
 
         adapter.onTimeUpdate(onTick);
         adapter.onEnded(() => finishAttempt(true));
@@ -671,6 +802,7 @@ const startOrResumeAttempt = async() => {
 
         heartbeatTimer = window.setInterval(() => heartbeat(false), HEARTBEAT_INTERVAL_MS);
         adapter.play();
+        await setPlayingState(true);
     } catch (error) {
         showError(error);
     }

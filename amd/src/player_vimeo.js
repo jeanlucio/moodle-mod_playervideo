@@ -21,6 +21,9 @@
  * Unlike the YouTube adapter, Player.js exposes a native 'timeupdate' event, so no polling
  * is needed here.
  *
+ * Native controls are disabled (controls: false): the plugin's own timeline bar is the only
+ * scrub/play surface, so a second, redundant progress bar never stacks under Vimeo's own.
+ *
  * @module     mod_playervideo/player_vimeo
  * @copyright  2026 Jean Lúcio
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -64,7 +67,7 @@ const loadApi = () => {
 export const createPlayer = async(targetId, embedUrl) => {
     await loadApi();
 
-    const vimeoplayer = new window.Vimeo.Player(targetId, {url: embedUrl});
+    const vimeoplayer = new window.Vimeo.Player(targetId, {url: embedUrl, controls: false});
     await vimeoplayer.ready();
 
     return {

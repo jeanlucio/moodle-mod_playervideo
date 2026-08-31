@@ -234,6 +234,57 @@ video.ph-video-embed {
     color: var(--pv-ink-text-dim, #a6acb8);
 }
 
+/*
+ * Play/pause toggle, sitting outside the video frame — the only play/pause control now that
+ * native player chrome (YouTube/Vimeo/HTML5 controls) is disabled, see player_youtube.js et al.
+ * The icon is drawn with plain CSS borders (a triangle for play, the classic "double border"
+ * trick for two pause bars) rather than an icon font, so it works with no extra dependency.
+ */
+.path-mod-playervideo .playervideo-playpause-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    border: none;
+    background: var(--pv-coral, #e8623d);
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.path-mod-playervideo .playervideo-playpause-btn:hover {
+    filter: brightness(1.1);
+}
+
+.path-mod-playervideo .playervideo-playpause-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgb(232 98 61 / 35%);
+}
+
+.path-mod-playervideo .playervideo-playpause-icon {
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0.5rem 0 0.5rem 0.8rem;
+    border-color: transparent transparent transparent var(--pv-ink, #1b1f27);
+    margin-inline-start: 0.15rem;
+}
+
+.path-mod-playervideo .playervideo-playpause-btn.is-playing .playervideo-playpause-icon {
+    width: 0.7rem;
+    height: 0.8rem;
+    border-style: double;
+    border-width: 0 0 0 0.7rem;
+    border-color: transparent transparent transparent var(--pv-ink, #1b1f27);
+}
+
+.path-mod-playervideo .playervideo-marker.playervideo-marker-readonly {
+    cursor: default;
+    pointer-events: none;
+}
+
 .path-mod-playervideo .playervideo-panel {
     background: var(--card-bg, #fff);
     border: 1px solid var(--border-color, #dee2e6);
