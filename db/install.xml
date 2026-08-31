@@ -13,6 +13,8 @@
         <FIELD NAME="introformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Format of the intro field"/>
         <FIELD NAME="videotype" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="youtube | vimeo | html5"/>
         <FIELD NAME="videourl" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Video URL, when videotype is youtube or vimeo"/>
+        <FIELD NAME="trimstart" TYPE="number" LENGTH="10" NOTNULL="false" DECIMALS="2" SEQUENCE="false" COMMENT="Playback window start, in seconds; null means from the beginning"/>
+        <FIELD NAME="trimend" TYPE="number" LENGTH="10" NOTNULL="false" DECIMALS="2" SEQUENCE="false" COMMENT="Playback window end, in seconds; null means until the end"/>
         <FIELD NAME="showinline" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Pin the video inline on the course page, without hiding grade/attempts"/>
         <FIELD NAME="grademethod" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Grade aggregation across attempts: 1=highest, 2=average, 3=first, 4=last"/>
         <FIELD NAME="grade" TYPE="number" LENGTH="10" NOTNULL="true" DEFAULT="100.00000" DECIMALS="5" SEQUENCE="false" COMMENT="Maximum grade; 0 means No grade (standard core convention)"/>

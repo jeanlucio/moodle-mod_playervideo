@@ -54,11 +54,18 @@ class question_service {
      * @throws coding_exception If $context is not a module context.
      */
     public static function get_or_create_category(context $context): int {
-        global $DB;
+        global $CFG, $DB;
 
         if ($context->contextlevel !== CONTEXT_MODULE) {
             throw new coding_exception('get_or_create_category() requires a CONTEXT_MODULE context.');
         }
+
+        // Both question_get_default_category() and question_get_top_category() are legacy
+        // global functions in lib/questionlib.php, not autoloaded — unlike a namespaced class, a
+        // real request never loads them unless something else in the same path already did
+        // (e.g. the question bank UI). A PHPUnit run can mask this: the core_question test
+        // generator loads this file as a side effect, which a live AJAX call never does.
+        require_once($CFG->libdir . '/questionlib.php');
 
         $category = question_get_default_category($context->id);
 
@@ -153,6 +160,45 @@ class question_service {
             'text' => format_text($question->questiontext, $question->questiontextformat, ['context' => $context]),
             'options' => $options,
         ];
+    }
+
+    /**
+     * Returns the formatted question text for several questions at once, keyed by id.
+     *
+     * Batch counterpart of get_question_for_frontend() for callers that only need the text
+     * (e.g. a timeline listing) — avoids one query per question in a loop.
+     *
+     * @param int[] $questionids Question ids.
+     * @param context $context The context for formatting the HTML text.
+     * @return array<int, string> Question id => formatted text; missing ids are simply absent.
+     */
+    public static function get_question_texts(array $questionids, context $context): array {
+        global $DB;
+
+        $questionids = array_values(array_unique(array_map('intval', $questionids)));
+        if (empty($questionids)) {
+            return [];
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($questionids);
+        $records = $DB->get_records_select(
+            'question',
+            "id $insql",
+            $inparams,
+            '',
+            'id, questiontext, questiontextformat'
+        );
+
+        $texts = [];
+        foreach ($records as $record) {
+            $texts[(int) $record->id] = format_text(
+                $record->questiontext,
+                $record->questiontextformat,
+                ['context' => $context]
+            );
+        }
+
+        return $texts;
     }
 
     /**

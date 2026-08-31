@@ -49,5 +49,21 @@ function xmldb_playervideo_upgrade(int $oldversion): bool {
         upgrade_mod_savepoint(true, 2026083101, 'playervideo');
     }
 
+    if ($oldversion < 2026083102) {
+        $table = new xmldb_table('playervideo');
+
+        $field = new xmldb_field('trimstart', XMLDB_TYPE_NUMBER, '10, 2', null, null, null, null, 'videourl');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field('trimend', XMLDB_TYPE_NUMBER, '10, 2', null, null, null, null, 'trimstart');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026083102, 'playervideo');
+    }
+
     return true;
 }
