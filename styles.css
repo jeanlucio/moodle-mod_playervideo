@@ -391,3 +391,21 @@ video.ph-video-embed {
     font-size: 0.74rem;
     color: var(--secondary, #6c757d);
 }
+
+.path-mod-playervideo .playervideo-poll-result-row {
+    margin-bottom: 0.5rem;
+}
+
+.path-mod-playervideo .playervideo-poll-result-bar {
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--card-bg, #e9ecef);
+    overflow: hidden;
+}
+
+.path-mod-playervideo .playervideo-poll-result-fill {
+    height: 100%;
+    background: var(--success, #4a8f6b);
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}

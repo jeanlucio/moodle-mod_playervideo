@@ -73,6 +73,27 @@ $questionids = array_filter(array_map(
     static fn($record) => $record->type === 'question' ? (int) $record->questionid : null,
     $interactionrecords
 ));
+$pollinteractionids = array_filter(array_map(
+    static fn($record) => $record->type === 'poll' ? (int) $record->id : null,
+    $interactionrecords
+));
+
+$polloptionsbyinteraction = [];
+if (!empty($pollinteractionids)) {
+    [$insql, $inparams] = $DB->get_in_or_equal($pollinteractionids, SQL_PARAMS_NAMED);
+    $polloptionrecords = $DB->get_records_select(
+        'playervideo_poll_options',
+        "interactionid $insql",
+        $inparams,
+        'interactionid ASC, sortorder ASC'
+    );
+    foreach ($polloptionrecords as $polloption) {
+        $polloptionsbyinteraction[$polloption->interactionid][] = [
+            'id' => (int) $polloption->id,
+            'text' => $polloption->optiontext,
+        ];
+    }
+}
 
 $interactions = [];
 foreach ($interactionrecords as $record) {
@@ -84,12 +105,13 @@ foreach ($interactionrecords as $record) {
         'id' => (int) $record->id,
         'timestamp' => (float) $record->timestamp,
         'type' => $record->type,
-        'notetext' => $record->type === 'note' ? format_text(
+        'notetext' => $record->type !== 'question' ? format_text(
             $record->notetext ?? '',
             $record->notetextformat,
             ['context' => $context]
         ) : '',
         'question' => $question,
+        'polloptions' => $polloptionsbyinteraction[$record->id] ?? [],
     ];
 }
 

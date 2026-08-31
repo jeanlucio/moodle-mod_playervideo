@@ -124,11 +124,23 @@ const resolveResult = (row) => {
     const resultmap = {
         answered: row.iscorrect ? ['result_correct', 'badge-success'] : ['result_incorrect', 'badge-danger'],
         viewed: ['result_viewed', 'badge-secondary'],
+        voted: ['result_viewed', 'badge-secondary'],
         'pending_review': ['result_pending', 'badge-warning'],
         graded: ['result_correct', 'badge-success'],
         notreached: ['result_notreached', 'badge-secondary'],
     };
     return resultmap[row.status] ?? ['result_notreached', 'badge-secondary'];
+};
+
+/**
+ * Maps an interaction type to its lang string key, used for the attempt summary table.
+ *
+ * @type {object}
+ */
+const TYPE_LABEL_KEYS = {
+    note: 'typenote',
+    question: 'typequestion',
+    poll: 'typepoll',
 };
 
 /**
@@ -143,6 +155,7 @@ const buildReviewContext = (row) => {
     return {
         isnote: row.type === 'note',
         isquestion: row.type === 'question',
+        ispoll: row.type === 'poll',
         notetext: row.notetext,
         questiontext: row.questiontext,
         options: row.options,
@@ -197,10 +210,8 @@ const startReview = async(reviewattemptid) => {
         await adapter.ready();
 
         for (const row of data.interactions) {
-            if (row.type === 'note' || row.type === 'question') {
-                adapter.seek(row.timestamp);
-                await showReviewOverlay(row);
-            }
+            adapter.seek(row.timestamp);
+            await showReviewOverlay(row);
         }
 
         showScreen('start');
@@ -257,7 +268,7 @@ const showSummary = async() => {
         const review = await call('mod_playervideo_get_attempt_review', {attemptid: attemptId});
 
         const labels = await Promise.all(
-            review.interactions.map((row) => getString(row.type === 'note' ? 'typenote' : 'typequestion', 'mod_playervideo'))
+            review.interactions.map((row) => getString(TYPE_LABEL_KEYS[row.type], 'mod_playervideo'))
         );
         const rows = review.interactions.map((row, index) => {
             const [resultkey, resultclass] = resolveResult(row);
@@ -443,6 +454,79 @@ const dismissNote = async() => {
 };
 
 /**
+ * Renders one poll option's aggregated vote bar (a per-render dynamic width, hence the inline
+ * style — see the plugin CLAUDE.md rule on when inline style is acceptable).
+ *
+ * @param {object} option One option from mod_playervideo_get_poll_results.
+ * @param {number} selectedid The option id the student voted for.
+ * @returns {string} HTML for one result row.
+ */
+const buildPollResultRow = (option, selectedid) => `
+    <div class="playervideo-poll-result-row ${option.polloptionid === selectedid ? 'fw-bold' : ''}">
+        <div class="d-flex justify-content-between">
+            <span>${option.optiontext}</span>
+            <span>${option.percent}%</span>
+        </div>
+        <div class="playervideo-poll-result-bar">
+            <div class="playervideo-poll-result-fill" style="width: ${option.percent}%"></div>
+        </div>
+    </div>
+`;
+
+/**
+ * Shows the aggregated class result after the student votes, then a Continue button.
+ *
+ * @param {number} selectedid The option id the student voted for.
+ * @returns {Promise<void>}
+ */
+const showPollFeedback = async(selectedid) => {
+    const overlay = document.getElementById('playervideo-interaction-overlay');
+    const continuestr = await getString('continuewatching', 'mod_playervideo');
+    let resultshtml = '';
+    try {
+        const results = await call('mod_playervideo_get_poll_results', {interactionid: currentInteraction.id});
+        resultshtml = results.options.map((option) => buildPollResultRow(option, selectedid)).join('');
+    } catch (error) {
+        // The vote itself is already recorded; the aggregated breakdown is a nice-to-have.
+        resultshtml = '';
+    }
+    overlay.innerHTML = `
+        <div class="card-body">
+            ${resultshtml}
+            <button type="button" class="btn btn-primary mt-2" id="playervideo-overlay-continue">${continuestr}</button>
+        </div>
+    `;
+    announce(await getString('typepoll', 'mod_playervideo'));
+    overlay.querySelector('#playervideo-overlay-continue').addEventListener('click', resumeAfterInteraction);
+    overlay.querySelector('button').focus();
+};
+
+/**
+ * Submits the student's vote for the currently open poll interaction.
+ *
+ * @returns {Promise<void>}
+ */
+const submitPollVote = async() => {
+    const selected = document.querySelector('input[name="playervideo-poll-option"]:checked');
+    if (!selected) {
+        Notification.alert('', await getString('error_invalidpolloption', 'mod_playervideo'));
+        return;
+    }
+    const selectedid = parseInt(selected.value, 10);
+
+    await Autosave.callWithRetry('mod_playervideo_submit_answer', {
+        attemptid: attemptId,
+        interactionid: currentInteraction.id,
+        answerid: 0,
+        responsetext: '',
+        polloptionid: selectedid,
+    });
+
+    treatedInteractionIds.add(currentInteraction.id);
+    await showPollFeedback(selectedid);
+};
+
+/**
  * Pauses the video and shows the live, editable overlay for one interaction.
  *
  * @param {object} interaction Interaction from playerData.interactions.
@@ -463,6 +547,39 @@ const pauseForInteraction = async(interaction) => {
         `;
         overlay.querySelector('#playervideo-overlay-continue').addEventListener('click', dismissNote);
         announce(await getString('typenote', 'mod_playervideo'));
+    } else if (interaction.type === 'poll') {
+        const confirmstr = await getString('confirmanswer', 'mod_playervideo');
+        const body = document.createElement('div');
+        body.className = 'card-body';
+        const prompt = document.createElement('div');
+        prompt.innerHTML = interaction.notetext;
+        body.appendChild(prompt);
+
+        const optionscontainer = document.createElement('div');
+        optionscontainer.className = 'mb-2';
+        interaction.polloptions.forEach((option) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'form-check';
+            wrapper.innerHTML = `
+                <input class="form-check-input" type="radio" name="playervideo-poll-option" value="${option.id}"
+                    id="playervideo-poll-option-${option.id}">
+                <label class="form-check-label" for="playervideo-poll-option-${option.id}">${option.text}</label>
+            `;
+            optionscontainer.appendChild(wrapper);
+        });
+        body.appendChild(optionscontainer);
+
+        const confirmbutton = document.createElement('button');
+        confirmbutton.type = 'button';
+        confirmbutton.className = 'btn btn-primary';
+        confirmbutton.id = 'playervideo-overlay-confirm';
+        confirmbutton.textContent = confirmstr;
+        confirmbutton.addEventListener('click', submitPollVote);
+        body.appendChild(confirmbutton);
+
+        overlay.innerHTML = '';
+        overlay.appendChild(body);
+        announce(await getString('typepoll', 'mod_playervideo'));
     } else {
         const confirmstr = await getString('confirmanswer', 'mod_playervideo');
         const body = document.createElement('div');

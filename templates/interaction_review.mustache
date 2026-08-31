@@ -27,11 +27,12 @@
     {
         "isnote": false,
         "isquestion": true,
+        "ispoll": false,
         "notetext": "",
         "questiontext": "<p>What is the capital of France?</p>",
         "options": [
-            {"id": 1, "text": "Paris", "correct": true, "selected": true},
-            {"id": 2, "text": "Lyon", "correct": false, "selected": false}
+            {"id": 1, "text": "Paris", "correct": true, "selected": true, "votes": 0, "percent": 0},
+            {"id": 2, "text": "Lyon", "correct": false, "selected": false, "votes": 0, "percent": 0}
         ],
         "hasresponsetext": false,
         "responsetext": "",
@@ -64,5 +65,19 @@
     <p>{{teacherfeedback}}</p>
     {{/hasteacherfeedback}}
     {{/isquestion}}
+    {{#ispoll}}
+    <div>{{{notetext}}}</div>
+    {{#options}}
+    <div class="playervideo-poll-result-row {{#selected}}fw-bold{{/selected}}">
+        <div class="d-flex justify-content-between">
+            <span>{{text}}{{#selected}} <span class="ms-1">({{#str}}yourresponse, mod_playervideo{{/str}})</span>{{/selected}}</span>
+            <span>{{percent}}%</span>
+        </div>
+        <div class="playervideo-poll-result-bar">
+            <div class="playervideo-poll-result-fill" style="width: {{percent}}%"></div>
+        </div>
+    </div>
+    {{/options}}
+    {{/ispoll}}
     <button type="button" class="btn btn-secondary" id="playervideo-review-continue">{{#str}}continuewatching, mod_playervideo{{/str}}</button>
 </div>
