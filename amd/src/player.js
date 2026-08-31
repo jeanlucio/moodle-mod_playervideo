@@ -221,6 +221,7 @@ const initTimelineControls = async() => {
 
     adapter.onTimeUpdate((time) => {
         document.getElementById('playervideo-playhead').style.left = `${percentForTime(time)}%`;
+        document.getElementById('playervideo-ruler-start').textContent = formatTime(time);
     });
 
     document.getElementById('playervideo-timeline').addEventListener('click', async(event) => {
@@ -231,6 +232,7 @@ const initTimelineControls = async() => {
         }
         adapter.seek(target);
         document.getElementById('playervideo-playhead').style.left = `${percentForTime(target)}%`;
+        document.getElementById('playervideo-ruler-start').textContent = formatTime(target);
     });
 
     document.getElementById('playervideo-playpause-btn').addEventListener('click', togglePlayPause);

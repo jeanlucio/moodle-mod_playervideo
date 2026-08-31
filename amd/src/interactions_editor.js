@@ -829,6 +829,7 @@ const initTimelineClick = () => {
         const time = timestampForClientX(event.clientX);
         adapter.seek(time);
         document.getElementById('playervideo-playhead').style.left = `${percentForTime(time)}%`;
+        document.getElementById('playervideo-ruler-start').textContent = formatTime(time);
     });
 
     document.getElementById('playervideo-add-here-btn').addEventListener('click', async() => {
@@ -918,6 +919,7 @@ export const init = async() => {
     if (adapter) {
         adapter.onTimeUpdate((time) => {
             document.getElementById('playervideo-playhead').style.left = `${percentForTime(time)}%`;
+            document.getElementById('playervideo-ruler-start').textContent = formatTime(time);
         });
     }
 

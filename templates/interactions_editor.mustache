@@ -41,20 +41,28 @@
         {{/noembed}}
 
         <div class="playervideo-timeline-wrap">
-            <div class="playervideo-timeline-ruler mono" aria-hidden="true">
-                <span id="playervideo-ruler-start">0:00</span>
-                <span id="playervideo-ruler-end">&nbsp;</span>
-            </div>
-            <div class="playervideo-timeline" id="playervideo-timeline" role="group" aria-label="{{#str}}timelinelabel, mod_playervideo{{/str}}">
-                <div class="playervideo-timeline-track"></div>
-                <div class="playervideo-trim-shade" id="playervideo-trim-shade-start"></div>
-                <div class="playervideo-trim-shade" id="playervideo-trim-shade-end"></div>
-                <div class="playervideo-playhead" id="playervideo-playhead"></div>
-                <button type="button" class="playervideo-trim-handle" id="playervideo-trim-handle-start"
-                    aria-label="{{#str}}trimstart, mod_playervideo{{/str}}"></button>
-                <button type="button" class="playervideo-trim-handle" id="playervideo-trim-handle-end"
-                    aria-label="{{#str}}trimend, mod_playervideo{{/str}}"></button>
-                <div id="playervideo-markers"></div>
+            <div class="playervideo-timeline-row">
+                <button type="button" class="playervideo-playpause-btn" id="playervideo-playpause-btn"
+                    aria-label="{{#str}}play, mod_playervideo{{/str}}">
+                    <span class="playervideo-playpause-icon" aria-hidden="true"></span>
+                </button>
+                <div class="playervideo-timeline-main">
+                    <div class="playervideo-timeline-ruler mono" aria-hidden="true">
+                        <span id="playervideo-ruler-start">0:00</span>
+                        <span id="playervideo-ruler-end">&nbsp;</span>
+                    </div>
+                    <div class="playervideo-timeline" id="playervideo-timeline" role="group" aria-label="{{#str}}timelinelabel, mod_playervideo{{/str}}">
+                        <div class="playervideo-timeline-track"></div>
+                        <div class="playervideo-trim-shade" id="playervideo-trim-shade-start"></div>
+                        <div class="playervideo-trim-shade" id="playervideo-trim-shade-end"></div>
+                        <div class="playervideo-playhead" id="playervideo-playhead"></div>
+                        <button type="button" class="playervideo-trim-handle" id="playervideo-trim-handle-start"
+                            aria-label="{{#str}}trimstart, mod_playervideo{{/str}}"></button>
+                        <button type="button" class="playervideo-trim-handle" id="playervideo-trim-handle-end"
+                            aria-label="{{#str}}trimend, mod_playervideo{{/str}}"></button>
+                        <div id="playervideo-markers"></div>
+                    </div>
+                </div>
             </div>
             <div class="playervideo-timeline-legend">
                 <span class="item"><span class="playervideo-swatch playervideo-swatch-question"></span> {{#str}}typequestion, mod_playervideo{{/str}}</span>
@@ -65,10 +73,6 @@
         </div>
 
         <div class="playervideo-stage-toolbar">
-            <button type="button" class="playervideo-playpause-btn" id="playervideo-playpause-btn"
-                aria-label="{{#str}}play, mod_playervideo{{/str}}">
-                <span class="playervideo-playpause-icon" aria-hidden="true"></span>
-            </button>
             <span class="playervideo-addhint" id="playervideo-add-hint"></span>
             <button type="button" class="btn btn-outline-secondary" id="playervideo-add-here-btn">
                 {{#str}}addhere, mod_playervideo{{/str}}
