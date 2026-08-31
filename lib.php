@@ -292,7 +292,10 @@ function playervideo_delete_instance(int $id): bool {
     global $CFG, $DB;
     require_once($CFG->libdir . '/gradelib.php');
 
-    $instance = $DB->get_record('playervideo', ['id' => $id], 'id, course', MUST_EXIST);
+    $instance = $DB->get_record('playervideo', ['id' => $id], 'id, course');
+    if (!$instance) {
+        return false;
+    }
 
     grade_update('mod/playervideo', $instance->course, 'mod', 'playervideo', $id, 0, null, ['deleted' => 1]);
 
