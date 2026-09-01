@@ -45,6 +45,7 @@ use mod_playervideo\local\attempt_manager;
  * @covers ::playervideo_questions_in_use
  * @covers ::playervideo_supports
  * @covers ::playervideo_extend_settings_navigation
+ * @covers ::playervideo_cm_info_dynamic
  */
 final class lib_test extends \advanced_testcase {
     #[\Override]
@@ -368,5 +369,78 @@ final class lib_test extends \advanced_testcase {
         playervideo_extend_settings_navigation($settingsnav, $node);
 
         $this->assertFalse($node->get('mod_playervideo_manageinteractions'));
+    }
+
+    /**
+     * Builds a real cm_info for the given instance, the type playervideo_cm_info_dynamic()
+     * expects.
+     *
+     * @param \stdClass $instance Instance record, with a cmid property.
+     * @return \cm_info
+     */
+    private function build_cm_info(\stdClass $instance): \cm_info {
+        $cm = get_coursemodule_from_id('playervideo', $instance->cmid, 0, true, MUST_EXIST);
+        return \cm_info::create($cm);
+    }
+
+    /**
+     * A "pin to course page" instance renders the video embed as the cm's content.
+     *
+     * @return void
+     */
+    public function test_cm_info_dynamic_sets_content_when_showinline_enabled(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->create_instance($course->id, ['showinline' => 1]);
+        $cminfo = $this->build_cm_info($instance);
+
+        playervideo_cm_info_dynamic($cminfo);
+
+        $this->assertStringContainsString('ph-video-embed', $cminfo->content);
+    }
+
+    /**
+     * An instance with "pin to course page" left off never sets any content.
+     *
+     * @return void
+     */
+    public function test_cm_info_dynamic_does_nothing_when_showinline_disabled(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->create_instance($course->id);
+        $cminfo = $this->build_cm_info($instance);
+
+        playervideo_cm_info_dynamic($cminfo);
+
+        $this->assertSame('', $cminfo->content);
+    }
+
+    /**
+     * Regression test: cm_info_dynamic() is invoked lazily by core (e.g. navigation
+     * building) and is not guaranteed to run before the page's <head> has been sent.
+     * $PAGE->requires->css() throws a fatal coding_exception once
+     * page_requirements_manager::is_head_done() is true, so this must degrade
+     * gracefully — skip the CSS require, but still render the embed — rather than fatal
+     * the whole page. Found live: global_navigation::generate_sections_and_activities()
+     * -> cm_info::get_name() triggered this hook after the head was already sent on a
+     * real request. get_head_code() is called directly (the same call
+     * core_renderer::standard_head_html() makes during $OUTPUT->header()) to flip
+     * is_head_done() to true without needing a full page render — moodle_page's own
+     * headerprinted flag is a different, later state and does not reliably predict this.
+     *
+     * @return void
+     */
+    public function test_cm_info_dynamic_does_not_fatal_after_head_done(): void {
+        global $PAGE;
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->create_instance($course->id, ['showinline' => 1]);
+        $cminfo = $this->build_cm_info($instance);
+
+        $renderer = $PAGE->get_renderer('core');
+        $PAGE->requires->get_head_code($PAGE, $renderer);
+        $this->assertTrue($PAGE->requires->is_head_done());
+
+        playervideo_cm_info_dynamic($cminfo);
+
+        $this->assertStringContainsString('ph-video-embed', $cminfo->content);
     }
 }

@@ -379,7 +379,21 @@ function playervideo_cm_info_dynamic(cm_info $cm): void {
         return;
     }
 
-    $PAGE->requires->css('/mod/playervideo/styles.css');
+    /*
+     * cm_info_dynamic() is invoked lazily, the first time any code touches this cm's
+     * dynamic properties — sometimes navigation building well after the page <head> has
+     * already been sent (confirmed live: global_navigation::generate_sections_and_
+     * activities() -> cm_info::get_name() can trigger this hook post-head on some
+     * requests). $PAGE->requires->css() throws a fatal coding_exception once the head is
+     * out, so it must never be called unconditionally here — skipping it in that rare
+     * case is a small styling gap on the inline embed, not a fatal error for the page.
+     * $PAGE->headerprinted tracks a different, later state (moodle_page::STATE_IN_BODY)
+     * and is not a reliable proxy for this — the actual flag page_requirements_manager
+     * itself checks is is_head_done(), which is what must be asked here.
+     */
+    if (!$PAGE->requires->is_head_done()) {
+        $PAGE->requires->css('/mod/playervideo/styles.css');
+    }
 
     if ($instance->videotype === 'html5') {
         $html = html_writer::tag('video', '', [
