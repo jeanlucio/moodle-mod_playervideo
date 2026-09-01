@@ -116,6 +116,7 @@ $string['modulename_help'] = 'The PlayerVideo activity plays a video (YouTube, V
 $string['modulenameplural'] = 'PlayerVideos';
 $string['newattempt'] = 'New attempt';
 $string['nointeractions'] = 'No interactions yet.';
+$string['noplayervideos'] = 'No PlayerVideo activities in this course.';
 $string['notedescription'] = 'A text that pauses the video — no right or wrong answer.';
 $string['notetext'] = 'Note text';
 $string['pause'] = 'Pause';

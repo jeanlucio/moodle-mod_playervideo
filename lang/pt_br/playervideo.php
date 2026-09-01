@@ -116,6 +116,7 @@ $string['modulename_help'] = 'A atividade PlayerVideo reproduz um vídeo (YouTub
 $string['modulenameplural'] = 'PlayerVideos';
 $string['newattempt'] = 'Nova tentativa';
 $string['nointeractions'] = 'Nenhuma interação ainda.';
+$string['noplayervideos'] = 'Nenhuma atividade PlayerVideo neste curso.';
 $string['notedescription'] = 'Um texto que pausa o vídeo — sem resposta certa ou errada.';
 $string['notetext'] = 'Texto da nota';
 $string['pause'] = 'Pausar';

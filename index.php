@@ -55,7 +55,7 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('modulenameplural', 'mod_playervideo'));
 
 if (empty($instances)) {
-    notice(get_string('nomodules', 'moodle'), new moodle_url('/course/view.php', ['id' => $course->id]));
+    notice(get_string('noplayervideos', 'mod_playervideo'), new moodle_url('/course/view.php', ['id' => $course->id]));
 } else {
     echo html_writer::table($table);
 }
