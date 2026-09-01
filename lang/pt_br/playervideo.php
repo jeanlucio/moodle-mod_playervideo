@@ -216,5 +216,6 @@ $string['videotype_html5'] = 'Upload';
 $string['videotype_vimeo'] = 'Vimeo';
 $string['videotype_youtube'] = 'YouTube';
 $string['videourl'] = 'URL do vídeo';
+$string['viewfullactivity'] = 'Responder perguntas e ver sua nota';
 $string['yourgrade'] = 'Sua nota: {$a}';
 $string['yourresponse'] = 'Sua resposta';

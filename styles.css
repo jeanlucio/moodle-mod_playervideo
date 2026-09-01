@@ -37,6 +37,17 @@ video.ph-video-embed {
     width: 100%;
 }
 
+/*
+ * Same scoping exception as .ph-video-embed above: the "go to the full activity" link
+ * cm_info_dynamic() adds below the inline embed also renders on the course page itself, never
+ * under .path-mod-playervideo.
+ */
+.playervideo-inline-viewlink {
+    margin-top: 0.375rem;
+    font-size: 0.85rem;
+    text-align: end;
+}
+
 .path-mod-playervideo .visually-hidden {
     position: absolute;
     width: 1px;

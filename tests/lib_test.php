@@ -399,6 +399,28 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
+     * Regression test: the inline embed must render a real link to the full activity page,
+     * and the cm's own URL must stay set (never nulled via set_no_view_link()) — otherwise
+     * the activity becomes unreachable everywhere on the site (the "Activities" listing,
+     * recent activity, calendar, any "next/previous activity" navigation), not just missing
+     * its interactive timeline inline. Found live: a real course with "pin to course page"
+     * enabled had no way at all to reach the questions or the grade.
+     *
+     * @return void
+     */
+    public function test_cm_info_dynamic_keeps_a_path_to_the_full_activity(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->create_instance($course->id, ['showinline' => 1]);
+        $cminfo = $this->build_cm_info($instance);
+
+        playervideo_cm_info_dynamic($cminfo);
+
+        $this->assertNotNull($cminfo->url);
+        $this->assertStringContainsString("id={$cminfo->id}", $cminfo->url->out(false));
+        $this->assertStringContainsString('/mod/playervideo/view.php', $cminfo->content);
+    }
+
+    /**
      * An instance with "pin to course page" left off never sets any content.
      *
      * @return void

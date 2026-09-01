@@ -345,6 +345,14 @@ function playervideo_get_coursemodule_info(stdClass $coursemodule): cached_cm_in
  * inline"). Only a plain embed, no interactive timeline — that only exists on the full
  * activity page (view.php).
  *
+ * Deliberately never calls $cm->set_no_view_link(): that nulls $cm->url globally (not just
+ * on the course page card), which silently made the activity unreachable everywhere else on
+ * the site — the "Atividades" listing, recent activity, calendar, any "next/previous
+ * activity" navigation — with no way back to the interactive page at all. An explicit link is
+ * also rendered directly inside the embed's own content, so the course page itself always has
+ * one too, regardless of how the course format's generic name-as-link rendering behaves for a
+ * custom cmlist item.
+ *
  * @param cm_info $cm Course module info.
  * @return void
  */
@@ -413,8 +421,13 @@ function playervideo_cm_info_dynamic(cm_info $cm): void {
         ]);
     }
 
+    $viewurl = new moodle_url('/mod/playervideo/view.php', ['id' => $cm->id]);
+    $html .= html_writer::div(
+        html_writer::link($viewurl, get_string('viewfullactivity', 'mod_playervideo')),
+        'playervideo-inline-viewlink'
+    );
+
     $cm->set_content($html);
-    $cm->set_no_view_link();
     $cm->set_custom_cmlist_item(true);
 }
 

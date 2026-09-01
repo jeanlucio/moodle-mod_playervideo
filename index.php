@@ -48,7 +48,7 @@ foreach ($instances as $instance) {
         format_string($instance->name),
         $cm->visible ? [] : ['class' => 'dimmed']
     );
-    $table->data[] = [$link, $cm->get_section_name()];
+    $table->data[] = [$link, get_section_name($course, $cm->get_section_info())];
 }
 
 echo $OUTPUT->header();
