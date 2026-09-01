@@ -77,6 +77,23 @@ let isPlaying = false;
 const call = (methodname, args) => Ajax.call([{methodname, args}])[0];
 
 /**
+ * Shows a business-rule error (a deliberate moodle_exception, using this plugin's own
+ * error_* string convention) via a plain alert, or an unexpected one via the generic
+ * AJAX-exception dialog — see the CLAUDE.md AMD rule this mirrors (and amd/src/player.js,
+ * where the same helper already exists for the student-facing side).
+ *
+ * @param {object} error Rejection from Ajax.call().
+ * @returns {Promise<void>}
+ */
+const showError = async(error) => {
+    if (typeof error.errorcode === 'string' && error.errorcode.startsWith('error_')) {
+        Notification.alert('', error.message);
+        return;
+    }
+    Notification.exception(error);
+};
+
+/**
  * Escapes a string for safe insertion as HTML text content.
  *
  * @param {string} text Raw text.
@@ -231,7 +248,7 @@ const loadInteractions = async() => {
         renderMarkers();
         renderOutline();
     } catch (error) {
-        Notification.exception(error);
+        showError(error);
     }
 };
 
@@ -248,7 +265,7 @@ const saveTrim = async() => {
             trimend,
         });
     } catch (error) {
-        Notification.exception(error);
+        showError(error);
         await loadInteractions();
     }
 };
@@ -339,12 +356,12 @@ const deleteActiveInteraction = async() => {
                 await loadInteractions();
                 await renderPicker();
             } catch (error) {
-                Notification.exception(error);
+                showError(error);
             }
         });
         modal.show();
     } catch (error) {
-        Notification.exception(error);
+        showError(error);
     }
 };
 
@@ -364,7 +381,7 @@ const renderFooter = (onSave) => {
     getString('save', 'moodle').then((label) => {
         savebutton.textContent = label;
         return null;
-    }).catch(Notification.exception);
+    }).catch(showError);
     savebutton.addEventListener('click', async() => {
         savebutton.disabled = true;
         try {
@@ -382,7 +399,7 @@ const renderFooter = (onSave) => {
         getString('delete', 'moodle').then((label) => {
             deletebutton.textContent = label;
             return null;
-        }).catch(Notification.exception);
+        }).catch(showError);
         deletebutton.addEventListener('click', deleteActiveInteraction);
         footer.appendChild(deletebutton);
     }
@@ -424,7 +441,7 @@ const renderNoteEditor = async(existing) => {
             await loadInteractions();
             await renderPicker();
         } catch (error) {
-            Notification.exception(error);
+            showError(error);
         }
     });
 };
@@ -497,7 +514,7 @@ const renderPollEditor = async(existing) => {
             await loadInteractions();
             await renderPicker();
         } catch (error) {
-            Notification.exception(error);
+            showError(error);
         }
     });
 };
@@ -669,7 +686,7 @@ const renderQuestionEditor = async(existing) => {
                 await loadInteractions();
                 await renderPicker();
             } catch (error) {
-                Notification.exception(error);
+                showError(error);
             } finally {
                 button.disabled = false;
             }
@@ -711,7 +728,7 @@ const renderQuestionEditor = async(existing) => {
                         results.appendChild(item);
                     });
                 } catch (error) {
-                    Notification.exception(error);
+                    showError(error);
                 }
             }, 300);
         });
@@ -749,7 +766,7 @@ const renderQuestionEditor = async(existing) => {
             await loadInteractions();
             await renderPicker();
         } catch (error) {
-            Notification.exception(error);
+            showError(error);
         }
     });
 };
@@ -909,7 +926,7 @@ export const init = async() => {
         await adapter.ready();
         duration = await adapter.getDuration();
     } catch (error) {
-        Notification.exception(error);
+        showError(error);
         duration = 0;
     }
 
