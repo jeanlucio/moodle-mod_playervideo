@@ -40,6 +40,21 @@ const TRIM_DRAG_EPSILON = 0.05;
 /** @var {number} Seconds an arrow-key press nudges a trim handle; Shift multiplies this. */
 const TRIM_KEY_STEP = 1;
 
+/** @var {number} Maximum number of answers/options a multichoice question or poll can have. */
+const MAX_ANSWERS = 6;
+
+/** @var {string} Decorative checkmark icon for the "mark as correct" answer button. */
+const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">' +
+    '<path d="M20 6 9 17l-5-5"/></svg>';
+
+/** @var {string} Decorative cross icon for the "mark as incorrect" answer button. */
+const ICON_CROSS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">' +
+    '<path d="M18 6 6 18M6 6l12 12"/></svg>';
+
+/** @var {string} Decorative trash icon for the "remove alternative/option" buttons. */
+const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+    '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
+
 /** @var {object|null} Editor data embedded server-side by interactions.php. */
 let editorData = null;
 
@@ -423,7 +438,7 @@ const renderNoteEditor = async(existing) => {
     body.innerHTML = `
         <div>
             <h2 class="playervideo-section-title">${escapeHtml(heading)}</h2>
-            <label class="field-label" for="playervideo-note-text">${escapeHtml(label)}</label>
+            <label class="playervideo-field-label" for="playervideo-note-text">${escapeHtml(label)}</label>
             <textarea class="form-control" id="playervideo-note-text" rows="3">${existing ? existing.notetext : ''}</textarea>
         </div>
     `;
@@ -458,36 +473,55 @@ const renderPollEditor = async(existing) => {
         'mod_playervideo',
         formatTime(existing ? existing.timestamp : pendingTimestamp)
     );
-    const [promptlabel, addoptionlabel] = await Promise.all([
+    const [promptlabel, addoptionlabel, removeoptionlabel, countlabel] = await Promise.all([
         getString('pollprompt', 'mod_playervideo'),
         getString('addpolloption', 'mod_playervideo'),
+        getString('removepolloption', 'mod_playervideo'),
+        getString('answercounthint', 'mod_playervideo', {count: 0, max: MAX_ANSWERS}),
     ]);
 
     const body = document.getElementById('playervideo-panel-body');
     body.innerHTML = `
         <div>
             <h2 class="playervideo-section-title">${escapeHtml(heading)}</h2>
-            <label class="field-label" for="playervideo-poll-prompt">${escapeHtml(promptlabel)}</label>
+            <label class="playervideo-field-label" for="playervideo-poll-prompt">${escapeHtml(promptlabel)}</label>
             <textarea class="form-control mb-2" id="playervideo-poll-prompt" rows="2"
                 >${existing ? existing.notetext : ''}</textarea>
             <div id="playervideo-poll-options"></div>
-            <button type="button" class="addanswer" id="playervideo-add-poll-option">${escapeHtml(addoptionlabel)}</button>
+            <button type="button" class="playervideo-addanswer"
+                id="playervideo-add-poll-option">${escapeHtml(addoptionlabel)}</button>
+            <div class="playervideo-answer-count"
+                id="playervideo-poll-option-count">${escapeHtml(countlabel)}</div>
         </div>
     `;
 
     const optionscontainer = document.getElementById('playervideo-poll-options');
+    const addbutton = document.getElementById('playervideo-add-poll-option');
+    const countlabelel = document.getElementById('playervideo-poll-option-count');
+
+    const updateOptionCount = async() => {
+        const count = optionscontainer.children.length;
+        countlabelel.textContent = await getString('answercounthint', 'mod_playervideo', {count, max: MAX_ANSWERS});
+        addbutton.disabled = count >= MAX_ANSWERS;
+    };
+
     const addOptionRow = (text) => {
-        if (optionscontainer.children.length >= 6) {
+        if (optionscontainer.children.length >= MAX_ANSWERS) {
             return;
         }
         const row = document.createElement('div');
         row.className = 'input-group mb-1 playervideo-poll-option-row';
         row.innerHTML = `
             <input type="text" class="form-control playervideo-poll-option-text" value="${escapeHtml(text)}">
-            <button type="button" class="btn btn-outline-danger" data-action="remove">&times;</button>
+            <button type="button" class="playervideo-answer-remove" data-action="remove"
+                aria-label="${escapeHtml(removeoptionlabel)}">${ICON_TRASH}</button>
         `;
-        row.querySelector('[data-action="remove"]').addEventListener('click', () => row.remove());
+        row.querySelector('[data-action="remove"]').addEventListener('click', () => {
+            row.remove();
+            updateOptionCount();
+        });
         optionscontainer.appendChild(row);
+        updateOptionCount();
     };
 
     const existingoptions = existing ? existing.polloptions : [];
@@ -497,7 +531,7 @@ const renderPollEditor = async(existing) => {
         addOptionRow('');
         addOptionRow('');
     }
-    document.getElementById('playervideo-add-poll-option').addEventListener('click', () => addOptionRow(''));
+    addbutton.addEventListener('click', () => addOptionRow(''));
 
     renderFooter(async() => {
         const notetext = document.getElementById('playervideo-poll-prompt').value;
@@ -529,6 +563,7 @@ const renderPollEditor = async(existing) => {
 const renderQuestionEditor = async(existing) => {
     let selectedQuestionId = existing ? existing.questionid : 0;
     let selectedQuestionPreview = existing ? existing.questionpreview : '';
+    let activetab = existing ? 'bank' : 'create';
 
     const heading = await getString(
         existing ? 'editmarkerat' : 'addmarkerat',
@@ -546,13 +581,13 @@ const renderQuestionEditor = async(existing) => {
     body.innerHTML = `
         <div>
             <h2 class="playervideo-section-title">${escapeHtml(heading)}</h2>
-            <label class="field-label" for="playervideo-weight">${escapeHtml(weightlabel)}</label>
+            <label class="playervideo-field-label" for="playervideo-weight">${escapeHtml(weightlabel)}</label>
             <input type="number" min="0" step="0.5" class="form-control mb-2" id="playervideo-weight"
                 value="${existing ? existing.weight : 1}">
-            <div class="subtabs" role="tablist">
-                <button type="button" role="tab" aria-selected="true"
+            <div class="playervideo-subtabs" role="tablist">
+                <button type="button" role="tab" aria-selected="${!existing}"
                     id="playervideo-tab-create">${escapeHtml(createherelabel)}</button>
-                <button type="button" role="tab" aria-selected="false"
+                <button type="button" role="tab" aria-selected="${!!existing}"
                     id="playervideo-tab-bank">${escapeHtml(pullfrombanklabel)}</button>
             </div>
             <div id="playervideo-question-subpanel" class="mt-2"></div>
@@ -571,15 +606,29 @@ const renderQuestionEditor = async(existing) => {
         }
     };
 
+    /**
+     * @var {Function|null} Creates the question from the "create here" fields and resolves with
+     * its new question id, once renderCreateSubpanel() has set it up. Shared by the panel
+     * footer's single Save button, which only calls this when the create tab is active — see
+     * the "activetab" branch in the renderFooter() call below.
+     */
+    let createQuestion = null;
+
     const renderCreateSubpanel = async() => {
-        const [qtypelabel, texttlabel, mclabel, tflabel, singlelabel, addanswerlabel, createlabel] = await Promise.all([
+        const [
+            qtypelabel, texttlabel, mclabel, tflabel, singlelabel, singlehintlabel,
+            addanswerlabel, removealternativelabel, markcorrectlabel, markincorrectlabel,
+        ] = await Promise.all([
             getString('questiontype', 'mod_playervideo'),
             getString('questiontext', 'mod_playervideo'),
             getString('qtypemultichoice', 'mod_playervideo'),
             getString('qtypetruefalse', 'mod_playervideo'),
             getString('singleanswer', 'mod_playervideo'),
+            getString('singleanswerhint', 'mod_playervideo'),
             getString('addanswer', 'mod_playervideo'),
-            getString('createandadd', 'mod_playervideo'),
+            getString('removealternative', 'mod_playervideo'),
+            getString('markcorrect', 'mod_playervideo'),
+            getString('markincorrect', 'mod_playervideo'),
         ]);
         const [truelabel, falselabel] = await Promise.all([
             getString('true', 'mod_playervideo'),
@@ -587,20 +636,29 @@ const renderQuestionEditor = async(existing) => {
         ]);
         const sub = document.getElementById('playervideo-question-subpanel');
         sub.innerHTML = `
-            <label class="field-label" for="playervideo-qtype">${escapeHtml(qtypelabel)}</label>
+            <label class="playervideo-field-label" for="playervideo-qtype">${escapeHtml(qtypelabel)}</label>
             <select class="form-select mb-2" id="playervideo-qtype">
                 <option value="multichoice">${escapeHtml(mclabel)}</option>
                 <option value="truefalse">${escapeHtml(tflabel)}</option>
             </select>
-            <label class="field-label" for="playervideo-questiontext">${escapeHtml(texttlabel)}</label>
+            <label class="playervideo-field-label" for="playervideo-questiontext">${escapeHtml(texttlabel)}</label>
             <textarea class="form-control mb-2" id="playervideo-questiontext" rows="2"></textarea>
             <div id="playervideo-multichoice-fields">
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="playervideo-single" checked>
-                    <label class="form-check-label" for="playervideo-single">${escapeHtml(singlelabel)}</label>
+                <div class="playervideo-toggle-row">
+                    <div class="copy">
+                        <strong>${escapeHtml(singlelabel)}</strong>
+                        <span>${escapeHtml(singlehintlabel)}</span>
+                    </div>
+                    <label class="playervideo-switch">
+                        <input type="checkbox" id="playervideo-single" checked>
+                        <span class="playervideo-switch-track"></span>
+                        <span class="playervideo-switch-thumb"></span>
+                    </label>
                 </div>
                 <div id="playervideo-answers"></div>
-                <button type="button" class="addanswer" id="playervideo-add-answer">${escapeHtml(addanswerlabel)}</button>
+                <button type="button" class="playervideo-addanswer"
+                    id="playervideo-add-answer">${escapeHtml(addanswerlabel)}</button>
+                <div class="playervideo-answer-count" id="playervideo-answer-count"></div>
             </div>
             <div id="playervideo-truefalse-fields" hidden>
                 <div class="form-check">
@@ -612,31 +670,55 @@ const renderQuestionEditor = async(existing) => {
                     <label class="form-check-label" for="playervideo-truefalse-incorrect">${escapeHtml(falselabel)}</label>
                 </div>
             </div>
-            <button type="button" class="btn btn-secondary mt-2"
-                id="playervideo-create-question-btn">${escapeHtml(createlabel)}</button>
         `;
 
         const answers = document.getElementById('playervideo-answers');
+        const addbutton = document.getElementById('playervideo-add-answer');
+        const countlabelel = document.getElementById('playervideo-answer-count');
+
+        const updateAnswerCount = async() => {
+            const count = answers.children.length;
+            countlabelel.textContent = await getString('answercounthint', 'mod_playervideo', {count, max: MAX_ANSWERS});
+            addbutton.disabled = count >= MAX_ANSWERS;
+        };
+
         const addAnswerRow = () => {
+            if (answers.children.length >= MAX_ANSWERS) {
+                return;
+            }
             const row = document.createElement('div');
             row.className = 'playervideo-answer-row mb-1';
             row.innerHTML = `
                 <input type="text" class="form-control playervideo-answer-text">
                 <div class="playervideo-correctness">
-                    <button type="button" class="playervideo-correct" aria-pressed="false">&#10003;</button>
+                    <button type="button" class="playervideo-correct" aria-pressed="false"
+                        aria-label="${escapeHtml(markcorrectlabel)}">${ICON_CHECK}</button>
+                    <button type="button" class="playervideo-incorrect" aria-pressed="true"
+                        aria-label="${escapeHtml(markincorrectlabel)}">${ICON_CROSS}</button>
                 </div>
-                <button type="button" class="answer-remove" data-action="remove">&times;</button>
+                <button type="button" class="playervideo-answer-remove" data-action="remove"
+                    aria-label="${escapeHtml(removealternativelabel)}">${ICON_TRASH}</button>
             `;
-            row.querySelector('.playervideo-correct').addEventListener('click', function() {
-                const ispressed = this.getAttribute('aria-pressed') === 'true';
-                this.setAttribute('aria-pressed', ispressed ? 'false' : 'true');
+            const correctbutton = row.querySelector('.playervideo-correct');
+            const incorrectbutton = row.querySelector('.playervideo-incorrect');
+            correctbutton.addEventListener('click', () => {
+                correctbutton.setAttribute('aria-pressed', 'true');
+                incorrectbutton.setAttribute('aria-pressed', 'false');
             });
-            row.querySelector('[data-action="remove"]').addEventListener('click', () => row.remove());
+            incorrectbutton.addEventListener('click', () => {
+                correctbutton.setAttribute('aria-pressed', 'false');
+                incorrectbutton.setAttribute('aria-pressed', 'true');
+            });
+            row.querySelector('[data-action="remove"]').addEventListener('click', () => {
+                row.remove();
+                updateAnswerCount();
+            });
             answers.appendChild(row);
+            updateAnswerCount();
         };
         addAnswerRow();
         addAnswerRow();
-        document.getElementById('playervideo-add-answer').addEventListener('click', addAnswerRow);
+        addbutton.addEventListener('click', addAnswerRow);
 
         document.getElementById('playervideo-qtype').addEventListener('change', (event) => {
             const qtype = event.target.value;
@@ -644,7 +726,7 @@ const renderQuestionEditor = async(existing) => {
             document.getElementById('playervideo-truefalse-fields').hidden = qtype !== 'truefalse';
         });
 
-        document.getElementById('playervideo-create-question-btn').addEventListener('click', async(event) => {
+        createQuestion = async() => {
             const qtype = document.getElementById('playervideo-qtype').value;
             const questiontext = document.getElementById('playervideo-questiontext').value;
             const args = {
@@ -665,32 +747,9 @@ const renderQuestionEditor = async(existing) => {
                     correct: row.querySelector('.playervideo-correct').getAttribute('aria-pressed') === 'true',
                 }));
             }
-
-            const button = event.currentTarget;
-            button.disabled = true;
-            try {
-                const result = await call('mod_playervideo_create_question', args);
-                const weight = parseFloat(document.getElementById('playervideo-weight').value) || 1;
-                await call('mod_playervideo_save_interaction', {
-                    playervideoid: editorData.playervideoid,
-                    interactionid: existing ? existing.id : 0,
-                    timestamp: existing ? existing.timestamp : pendingTimestamp,
-                    type: 'question',
-                    questionid: result.questionid,
-                    weight,
-                });
-                Notification.addNotification({
-                    message: await getString('questioncreatedandadded', 'mod_playervideo'),
-                    type: 'success',
-                });
-                await loadInteractions();
-                await renderPicker();
-            } catch (error) {
-                showError(error);
-            } finally {
-                button.disabled = false;
-            }
-        });
+            const result = await call('mod_playervideo_create_question', args);
+            return result.questionid;
+        };
     };
 
     const renderBankSubpanel = () => {
@@ -735,34 +794,49 @@ const renderQuestionEditor = async(existing) => {
     };
 
     document.getElementById('playervideo-tab-create').addEventListener('click', function() {
+        activetab = 'create';
         this.setAttribute('aria-selected', 'true');
         document.getElementById('playervideo-tab-bank').setAttribute('aria-selected', 'false');
         renderCreateSubpanel();
     });
     document.getElementById('playervideo-tab-bank').addEventListener('click', function() {
+        activetab = 'bank';
         this.setAttribute('aria-selected', 'true');
         document.getElementById('playervideo-tab-create').setAttribute('aria-selected', 'false');
         renderBankSubpanel();
     });
 
-    await renderCreateSubpanel();
+    if (activetab === 'bank') {
+        renderBankSubpanel();
+    } else {
+        await renderCreateSubpanel();
+    }
     updateSelectedQuestionDisplay();
 
     renderFooter(async() => {
-        if (selectedQuestionId === 0) {
-            Notification.alert('', await getString('error_noquestionselected', 'mod_playervideo'));
-            return;
-        }
         const weight = parseFloat(document.getElementById('playervideo-weight').value) || 1;
         try {
+            let questionid = selectedQuestionId;
+            if (activetab === 'create') {
+                questionid = await createQuestion();
+            } else if (questionid === 0) {
+                Notification.alert('', await getString('error_noquestionselected', 'mod_playervideo'));
+                return;
+            }
             await call('mod_playervideo_save_interaction', {
                 playervideoid: editorData.playervideoid,
                 interactionid: existing ? existing.id : 0,
                 timestamp: existing ? existing.timestamp : pendingTimestamp,
                 type: 'question',
-                questionid: selectedQuestionId,
+                questionid,
                 weight,
             });
+            if (activetab === 'create') {
+                Notification.addNotification({
+                    message: await getString('questioncreatedandadded', 'mod_playervideo'),
+                    type: 'success',
+                });
+            }
             await loadInteractions();
             await renderPicker();
         } catch (error) {
