@@ -28,7 +28,6 @@
 
     Example context (json):
     {
-        "intro": "<p>Watch the video and answer as you go.</p>",
         "introbody": "<p>This video pauses at marked points to show a question or a note.</p>",
         "canattempt": true,
         "canstart": true,
@@ -40,9 +39,11 @@
     }
 }}
 <div class="path-mod-playervideo">
-    {{#intro}}
-    <div class="playervideo-intro">{{{intro}}}</div>
-    {{/intro}}
+    {{!
+        The activity description is rendered once by the course's incourse page layout via
+        $PAGE->activityheader — never repeat format_module_intro() here, or every drop shortcode
+        (or any other filtered content) in the description renders twice on the page.
+    }}
     <div id="playervideo-onboarding-content" hidden>{{{introbody}}}</div>
 
     <div id="playervideo-start-screen">

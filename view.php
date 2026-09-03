@@ -168,9 +168,6 @@ echo html_writer::tag(
     ['type' => 'application/json', 'id' => 'playervideo-player-data']
 );
 echo $OUTPUT->render_from_template('mod_playervideo/view', [
-    'intro' => trim($instance->intro ?? '') !== ''
-        ? format_module_intro('playervideo', $instance, $cm->id)
-        : '',
     'introbody' => get_string('introbody', 'mod_playervideo'),
     'canattempt' => $canattempt,
     'canstart' => $canstart,
