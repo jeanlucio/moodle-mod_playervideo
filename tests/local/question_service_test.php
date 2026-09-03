@@ -133,6 +133,83 @@ final class question_service_test extends \advanced_testcase {
     }
 
     /**
+     * Tests that get_question_texts() resolves every requested question's formatted text in
+     * one batch call, keyed by id — the timeline-listing use case it exists for.
+     *
+     * @return void
+     */
+    public function test_get_question_texts_resolves_every_question(): void {
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category(['contextid' => \context_system::instance()->id]);
+        $first = $questiongenerator->create_question('multichoice', 'one_of_four', [
+            'category' => $category->id,
+            'questiontext' => ['text' => 'First question?', 'format' => FORMAT_HTML],
+        ]);
+        $second = $questiongenerator->create_question('truefalse', 'true', [
+            'category' => $category->id,
+            'questiontext' => ['text' => 'Second question?', 'format' => FORMAT_HTML],
+        ]);
+
+        $texts = question_service::get_question_texts(
+            [(int) $first->id, (int) $second->id],
+            \context_system::instance()
+        );
+
+        $this->assertCount(2, $texts);
+        $this->assertSame('First question?', $texts[(int) $first->id]);
+        $this->assertSame('Second question?', $texts[(int) $second->id]);
+    }
+
+    /**
+     * Tests that a non-existent question id is simply absent from the result, rather than
+     * producing an error or a placeholder entry.
+     *
+     * @return void
+     */
+    public function test_get_question_texts_omits_missing_questions(): void {
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category(['contextid' => \context_system::instance()->id]);
+        $question = $this->make_multichoice_question($category->id);
+
+        $texts = question_service::get_question_texts(
+            [(int) $question->id, 999999],
+            \context_system::instance()
+        );
+
+        $this->assertCount(1, $texts);
+        $this->assertArrayHasKey((int) $question->id, $texts);
+        $this->assertArrayNotHasKey(999999, $texts);
+    }
+
+    /**
+     * Tests that an empty id list short-circuits to an empty map without querying the
+     * database — get_in_or_equal() on an empty array would otherwise throw.
+     *
+     * @return void
+     */
+    public function test_get_question_texts_empty_list_returns_empty_map(): void {
+        $this->assertSame([], question_service::get_question_texts([], \context_system::instance()));
+    }
+
+    /**
+     * Tests that duplicate ids in the input are resolved once, not once per occurrence.
+     *
+     * @return void
+     */
+    public function test_get_question_texts_deduplicates_repeated_ids(): void {
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category(['contextid' => \context_system::instance()->id]);
+        $question = $this->make_multichoice_question($category->id);
+
+        $texts = question_service::get_question_texts(
+            [(int) $question->id, (int) $question->id],
+            \context_system::instance()
+        );
+
+        $this->assertCount(1, $texts);
+    }
+
+    /**
      * Creates a course and a generic activity, returning that activity's module context —
      * question_get_default_category() only supports CONTEXT_MODULE, and this plugin always
      * creates its questions in the category of the activity instance itself.

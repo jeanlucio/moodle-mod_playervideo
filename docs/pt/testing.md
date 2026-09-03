@@ -39,13 +39,16 @@ validação ao vivo de ponta a ponta contra provedores de IA reais (Gemini/Groq/
 
 | Arquivo de teste | Casos |
 |-------------------|------:|
+| `question_service_test.php` | 19 |
 | `attempt_manager_test.php` | 16 |
-| `question_service_test.php` | 15 |
+| `hud_service_test.php` | 16 |
+| `video_source_test.php` | 9 |
 | `caption_service_test.php` | 7 |
+| `intro_service_test.php` | 4 |
 | `di_summary_service_test.php` | 3 |
 | `transcript_service_test.php` | 3 |
 | `ai_service_test.php` | 2 |
-| **Subtotal** | **46** |
+| **Subtotal** | **79** |
 
 ### Testes de Biblioteca, Conclusão, Saída, Privacidade, Backup e Isolamento
 
@@ -60,7 +63,7 @@ validação ao vivo de ponta a ponta contra provedores de IA reais (Gemini/Groq/
 | `output/view_render_test.php` | 1 |
 | **Subtotal** | **47** |
 
-| **Total Geral** | **204** |
+| **Total Geral** | **237** |
 
 ```bash
 vendor/bin/phpunit --bootstrap lib/phpunit/bootstrap.php mod/playervideo
@@ -70,6 +73,9 @@ vendor/bin/phpunit --bootstrap lib/phpunit/bootstrap.php mod/playervideo
 
 | Classe | Cobertura de linhas |
 |--------|:--------------------:|
+| `local\di_summary_service` | 100% |
+| `local\intro_service` | 100% |
+| `local\video_source` | 100% |
 | `external\get_attempt_review` | 100% |
 | `external\get_captions` | 100% |
 | `external\get_di_summaries` | 100% |
@@ -77,7 +83,6 @@ vendor/bin/phpunit --bootstrap lib/phpunit/bootstrap.php mod/playervideo
 | `external\get_poll_results` | 100% |
 | `external\save_caption` | 100% |
 | `external\save_trim` | 100% |
-| `local\di_summary_service` | 100% |
 | `local\attempt_manager` | 98% |
 | `external\create_question` | 98% |
 | `external\save_progress` | 98% |
@@ -89,27 +94,32 @@ vendor/bin/phpunit --bootstrap lib/phpunit/bootstrap.php mod/playervideo
 | `external\save_interaction` | 97% |
 | `external\get_report` | 96% |
 | `privacy\provider` | 94% |
+| `local\hud_service` | 89% |
 | `external\submit_answer` | 85% |
 | `external\start_attempt` | 80% |
 | `local\transcript_service` | 78% |
 | `completion\custom_completion` | 77% |
+| `local\question_service` | 72% |
 | `local\caption_service` | 67% |
 | `external\generate_di_summary` | 62% |
-| `local\question_service` | 60% |
 | `external\generate_questions_batch` | 52% |
 | `external\generate_question_ai` | 52% |
 | `external\generate_response_correction` | 49% |
 | `local\ai_service` | 32% |
-| **Geral** | **79%** |
+| **Geral** | **82%** |
 
 > As classes voltadas pra IA (`ai_service`, `generate_question_ai`, `generate_questions_batch`,
 > `generate_response_correction`, `generate_di_summary`) mostram a menor cobertura de linhas
 > por PHPUnit do plugin — a maior parte dos seus ramos com provedor real (a escada de fallback
 > `local_aihub`/`core_ai`, uma resposta JSON genuinamente malformada, um erro real de limite de
 > taxa) é exercitada por validação ao vivo de ponta a ponta contra provedores de IA reais, não
-> por uma camada HTTP simulada — o que esta tabela por classe não conta. `question_service`/
+> por uma camada HTTP simulada — o que esta tabela por classe não conta. Fechar essa lacuna com
+> PHPUnit puro exigiria injetar um transporte simulável no `ai_service`, uma mudança real de
+> arquitetura, não só um teste a mais — deliberadamente não feito, espelhando a mesma escolha já
+> tomada pro `mod_playerwords\local\ai_word_generator` irmão. `question_service`/
 > `caption_service` têm de forma parecida alguns ramos (o caminho só-4.5 de
 > `question_get_default_category()`, um passthrough de VTT já real) que só uma versão
-> específica do Moodle ou um formato de entrada específico alcança. Três classes de domínio
-> ainda sem arquivo de teste próprio — `local\hud_service`, `local\intro_service`,
-> `local\video_source` — são uma lacuna real e reconhecida, não escondida.
+> específica do Moodle ou um formato de entrada específico alcança. A lacuna restante do
+> `hud_service` é o caso inverso: seus ramos de degradação graciosa (o retorno antecipado de
+> cada método quando o `block_playerhud` está ausente) só rodam de verdade num site onde o
+> bloco nunca foi instalado — inertes aqui, já que este site de desenvolvimento o tem.
