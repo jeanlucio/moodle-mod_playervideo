@@ -386,6 +386,7 @@ const resolveResult = (row) => {
         answered: row.iscorrect ? ['result_correct', 'badge-success'] : ['result_incorrect', 'badge-danger'],
         viewed: ['result_viewed', 'badge-secondary'],
         voted: ['result_viewed', 'badge-secondary'],
+        'pending_ai': ['result_pending', 'badge-warning'],
         'pending_review': ['result_pending', 'badge-warning'],
         graded: ['result_correct', 'badge-success'],
         notreached: ['result_notreached', 'badge-secondary'],

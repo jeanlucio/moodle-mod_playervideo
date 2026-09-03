@@ -693,3 +693,10 @@ video.ph-video-embed {
 .playervideo-disummary-text {
     white-space: pre-line;
 }
+
+.path-mod-playervideo .playervideo-student-answer {
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.25rem;
+    background: var(--card-bg, #f8f9fa);
+    white-space: pre-line;
+}

@@ -166,7 +166,10 @@ class submit_answer extends external_api {
                     throw new moodle_exception('error_responsetextrequired', 'mod_playervideo');
                 }
                 $response->responsetext = $params['responsetext'];
-                $response->status = 'pending_review';
+                // Not 'pending_review' yet — no AI suggestion has been generated at this point
+                // (see generate_response_correction, Fase 4d). attempt_manager::has_pending_
+                // correction() already treats both statuses as "still needs a teacher decision".
+                $response->status = 'pending_ai';
             }
         }
 
@@ -213,7 +216,7 @@ class submit_answer extends external_api {
                 null,
                 NULL_ALLOWED
             ),
-            'status' => new external_value(PARAM_ALPHANUMEXT, 'answered | viewed | voted | pending_review'),
+            'status' => new external_value(PARAM_ALPHANUMEXT, 'answered | viewed | voted | pending_ai'),
         ]);
     }
 }

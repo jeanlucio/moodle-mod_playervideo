@@ -249,6 +249,39 @@ class attempt_manager {
     }
 
     /**
+     * Recomputes an attempt's status/grade after a pending open-question correction is resolved.
+     *
+     * Deliberately separate from {@see finish_attempt()} rather than calling it a second time:
+     * finish_attempt() unconditionally stamps `timefinish` to "now", which is correct the first
+     * time (the student really did just finish) but would be wrong here — it would overwrite the
+     * attempt's real finish time with whatever moment the teacher happened to grade it, days
+     * later. This method only ever touches `status`/`grade`/`timemodified`.
+     *
+     * @param int $attemptid The attempt id.
+     * @param float $maxgrade The instance's maximum grade (playervideo.grade).
+     * @return stdClass The updated attempt record.
+     */
+    public static function recalculate_after_review(int $attemptid, float $maxgrade): stdClass {
+        global $DB;
+
+        $attempt = $DB->get_record('playervideo_attempts', ['id' => $attemptid], '*', MUST_EXIST);
+
+        if ($attempt->status !== 'pendingcorrection' || self::has_pending_correction($attemptid)) {
+            // Either nothing was actually awaiting this (already finished), or another response
+            // is still pending — the attempt stays pendingcorrection either way.
+            return $attempt;
+        }
+
+        $attempt->status = 'finished';
+        $attempt->grade = self::calculate_attempt_grade($attemptid, $maxgrade);
+        $attempt->timemodified = time();
+
+        $DB->update_record('playervideo_attempts', $attempt);
+
+        return $attempt;
+    }
+
+    /**
      * Aggregates the student's final activity grade across all their finished attempts.
      *
      * @param int $playervideoid The activity instance id.
@@ -272,6 +305,56 @@ class attempt_manager {
 
         $grades = array_map(static fn(stdClass $attempt): float => (float) $attempt->grade, array_values($attempts));
 
+        return self::apply_grademethod($grades, $grademethod);
+    }
+
+    /**
+     * Bulk counterpart of {@see aggregate_final_grade()} for a report listing every student at
+     * once — a single query for every student's finished attempts, instead of one query per
+     * student in a loop (see the project's own rule against `$DB` calls inside loops).
+     *
+     * @param int $playervideoid The activity instance id.
+     * @param int[] $userids Student ids to aggregate for.
+     * @param int $grademethod One of the GRADE_* constants.
+     * @return array Student id (int) => aggregated grade (float), or null if no finished attempt.
+     */
+    public static function aggregate_final_grades_bulk(int $playervideoid, array $userids, int $grademethod): array {
+        global $DB;
+
+        $result = array_fill_keys($userids, null);
+        if (empty($userids)) {
+            return $result;
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+        $records = $DB->get_records_select(
+            'playervideo_attempts',
+            "playervideoid = :playervideoid AND status = :finished AND userid $insql",
+            array_merge(['playervideoid' => $playervideoid, 'finished' => 'finished'], $inparams),
+            'userid ASC, attemptnumber ASC',
+            'id, userid, attemptnumber, grade'
+        );
+
+        $gradesbyuser = [];
+        foreach ($records as $record) {
+            $gradesbyuser[(int) $record->userid][] = (float) $record->grade;
+        }
+
+        foreach ($gradesbyuser as $userid => $grades) {
+            $result[$userid] = self::apply_grademethod($grades, $grademethod);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Applies one of the GRADE_* aggregation methods to an already-fetched list of grades.
+     *
+     * @param float[] $grades Grades, in attempt order (oldest first); never empty.
+     * @param int $grademethod One of the GRADE_* constants.
+     * @return float
+     */
+    private static function apply_grademethod(array $grades, int $grademethod): float {
         switch ($grademethod) {
             case self::GRADE_AVERAGE:
                 return array_sum($grades) / count($grades);

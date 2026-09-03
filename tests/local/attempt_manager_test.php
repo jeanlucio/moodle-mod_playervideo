@@ -355,4 +355,123 @@ final class attempt_manager_test extends \advanced_testcase {
             attempt_manager::GRADE_HIGHEST
         ));
     }
+
+    /**
+     * Tests recalculate_after_review(): a pendingcorrection attempt with no more pending
+     * responses is recomputed and flips to finished, without touching its original timefinish —
+     * the whole reason this method exists instead of calling finish_attempt() a second time.
+     *
+     * @return void
+     */
+    public function test_recalculate_after_review_finishes_without_touching_timefinish(): void {
+        global $DB;
+
+        $attempt = attempt_manager::start_attempt(self::PLAYERVIDEOID, self::USERID);
+        $interaction = $this->create_interaction('question', 1.0);
+        $responseid = $this->create_response((int) $attempt->id, $interaction, ['status' => 'pending_review']);
+
+        $pending = attempt_manager::finish_attempt((int) $attempt->id, 100.0);
+        $this->assertSame('pendingcorrection', $pending->status);
+        $originaltimefinish = $pending->timefinish;
+
+        // Simulate a teacher confirming the grade a day later.
+        $DB->set_field('playervideo_responses', 'status', 'graded', ['id' => $responseid]);
+        $DB->set_field('playervideo_responses', 'teachergrade', 0.8, ['id' => $responseid]);
+
+        $recalculated = attempt_manager::recalculate_after_review((int) $attempt->id, 100.0);
+
+        $this->assertSame('finished', $recalculated->status);
+        $this->assertSame(80.0, $recalculated->grade);
+        // The method reads the attempt back via get_record() and never touches timefinish on
+        // this path, so it comes back as a DB string, not the int finish_attempt() set in
+        // memory — cast both sides, same pattern already established for grade fields.
+        $this->assertSame((int) $originaltimefinish, (int) $recalculated->timefinish);
+    }
+
+    /**
+     * Tests recalculate_after_review(): stays pendingcorrection while another response of the
+     * same attempt is still pending.
+     *
+     * @return void
+     */
+    public function test_recalculate_after_review_stays_pending_with_another_response_outstanding(): void {
+        global $DB;
+
+        $attempt = attempt_manager::start_attempt(self::PLAYERVIDEOID, self::USERID);
+        $first = $this->create_interaction('question', 1.0);
+        $second = $this->create_interaction('question', 1.0);
+        $firstresponseid = $this->create_response((int) $attempt->id, $first, ['status' => 'pending_review']);
+        $this->create_response((int) $attempt->id, $second, ['status' => 'pending_review']);
+
+        attempt_manager::finish_attempt((int) $attempt->id, 100.0);
+        $DB->set_field('playervideo_responses', 'status', 'graded', ['id' => $firstresponseid]);
+
+        $recalculated = attempt_manager::recalculate_after_review((int) $attempt->id, 100.0);
+
+        $this->assertSame('pendingcorrection', $recalculated->status);
+        $this->assertNull($recalculated->grade);
+    }
+
+    /**
+     * Tests recalculate_after_review(): a no-op when the attempt was never pendingcorrection in
+     * the first place (e.g. called twice by mistake).
+     *
+     * @return void
+     */
+    public function test_recalculate_after_review_is_a_noop_on_an_already_finished_attempt(): void {
+        $attempt = attempt_manager::start_attempt(self::PLAYERVIDEOID, self::USERID);
+        $interaction = $this->create_interaction('question', 1.0);
+        $this->create_response((int) $attempt->id, $interaction, ['iscorrect' => 1]);
+
+        $finished = attempt_manager::finish_attempt((int) $attempt->id, 100.0);
+        $this->assertSame('finished', $finished->status);
+
+        $recalculated = attempt_manager::recalculate_after_review((int) $attempt->id, 100.0);
+
+        $this->assertSame('finished', $recalculated->status);
+        // A no-op recalculate_after_review() reads the attempt back via get_record(), so its
+        // numeric fields come back as DB strings rather than the native types finish_attempt()
+        // set in memory — cast both sides before comparing.
+        $this->assertSame((float) $finished->grade, (float) $recalculated->grade);
+        $this->assertSame((int) $finished->timefinish, (int) $recalculated->timefinish);
+    }
+
+    /**
+     * Tests aggregate_final_grades_bulk(): one query aggregating several students at once
+     * matches what aggregate_final_grade() would return for each of them individually,
+     * including a student with no finished attempts at all.
+     *
+     * @return void
+     */
+    public function test_aggregate_final_grades_bulk_matches_per_student_aggregation(): void {
+        global $DB;
+
+        $otheruserid = self::USERID + 1;
+
+        foreach ([60.0, 100.0] as $grade) {
+            $attempt = attempt_manager::start_attempt(self::PLAYERVIDEOID, self::USERID);
+            $attempt->status = 'finished';
+            $attempt->grade = $grade;
+            $attempt->timefinish = time();
+            $DB->update_record('playervideo_attempts', $attempt);
+        }
+
+        $attempt = attempt_manager::start_attempt(self::PLAYERVIDEOID, $otheruserid);
+        $attempt->status = 'finished';
+        $attempt->grade = 90.0;
+        $attempt->timefinish = time();
+        $DB->update_record('playervideo_attempts', $attempt);
+
+        $userwithnothing = self::USERID + 2;
+
+        $bulk = attempt_manager::aggregate_final_grades_bulk(
+            self::PLAYERVIDEOID,
+            [self::USERID, $otheruserid, $userwithnothing],
+            attempt_manager::GRADE_HIGHEST
+        );
+
+        $this->assertSame(100.0, $bulk[self::USERID]);
+        $this->assertSame(90.0, $bulk[$otheruserid]);
+        $this->assertNull($bulk[$userwithnothing]);
+    }
 }

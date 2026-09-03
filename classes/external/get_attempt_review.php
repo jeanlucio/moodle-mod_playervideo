@@ -221,7 +221,7 @@ class get_attempt_review extends external_api {
                     'teacherfeedback' => new external_value(PARAM_RAW, 'Teacher feedback, for an open question'),
                     'status' => new external_value(
                         PARAM_ALPHANUMEXT,
-                        'answered | viewed | voted | pending_review | graded | notreached'
+                        'answered | viewed | voted | pending_ai | pending_review | graded | notreached'
                     ),
                 ]),
                 'Interactions, in timeline order'

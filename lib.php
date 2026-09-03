@@ -524,4 +524,21 @@ function playervideo_extend_settings_navigation(
         null,
         'mod_playervideo_manageinteractions'
     );
+
+    // Fase 4d: correction queue + analytics — gated on either capability, since a custom role
+    // could plausibly grant only one of the two (see report.php's own per-section WS checks for
+    // the real enforcement; this only controls whether the link itself appears).
+    if (
+        has_capability('mod/playervideo:reviewresponses', $cm->context)
+        || has_capability('mod/playervideo:viewreports', $cm->context)
+    ) {
+        $reporturl = new moodle_url('/mod/playervideo/report.php', ['id' => $cm->id]);
+        $playervideonode->add(
+            get_string('viewreport', 'mod_playervideo'),
+            $reporturl,
+            navigation_node::TYPE_SETTING,
+            null,
+            'mod_playervideo_viewreport'
+        );
+    }
 }
