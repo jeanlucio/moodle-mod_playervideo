@@ -7,7 +7,7 @@
 * 🖱️ **Editor de Timeline por Clique:** O professor marca uma pergunta, uma nota ou uma enquete
   clicando diretamente no ponto certo da própria timeline do vídeo, arrasta duas alças na mesma
   timeline pra recortar a janela de reprodução (início/fim), e edita ou remove qualquer marcador
-  na mesma tela — nada de formulário separado cheio de campos numéricos de timestamp.
+  na mesma tela.
 * ❓ **Três Tipos de Interação:** *Pergunta* (múltipla escolha, verdadeiro/falso ou dissertativa,
   puxada do Banco de Questões real ou criada na hora), *Nota* (um aviso em texto inline, sem
   nota), e *Enquete* (sem resposta certa — o resultado agregado da turma aparece pro estudante

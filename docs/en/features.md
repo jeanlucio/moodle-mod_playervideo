@@ -7,7 +7,7 @@
 * 🖱️ **Click-to-Mark Timeline Editor:** The teacher marks a question, a note or a poll directly
   on the video's own timeline by clicking where it should fire, drags two handles on the same
   timeline to trim the playable window (start/end), and edits or removes any marker from the
-  same view — no separate form full of raw timestamp fields.
+  same view.
 * ❓ **Three Interaction Types:** *Question* (multiple-choice, true/false or open/essay, pulled
   from the real Question Bank or created inline), *Note* (an inline text marker, no grading),
   and *Poll* (no correct answer — the class's aggregate result is shown back to the student
