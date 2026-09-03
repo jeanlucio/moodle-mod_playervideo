@@ -249,4 +249,136 @@ final class question_service_test extends \advanced_testcase {
         $this->assertTrue(question_service::has_questions_in_use([(int) $referenced->id]));
         $this->assertFalse(question_service::has_questions_in_use([(int) $unrelated->id]));
     }
+
+    /**
+     * Tests that a single correct answer among several gets fraction 1.0, the rest 0.0 — the
+     * shared helper both create_question and the AI generators rely on for this derivation.
+     *
+     * @return void
+     */
+    public function test_build_multichoice_formdata_derives_single_correct_fraction(): void {
+        $formdata = question_service::build_multichoice_formdata([
+            ['text' => 'One', 'correct' => true],
+            ['text' => 'Two', 'correct' => false],
+            ['text' => 'Three', 'correct' => false],
+        ], true);
+
+        // PHP's / operator returns an int, not a float, when the division is exact (1/1) —
+        // cast before comparing, same as the equivalent DB-round-trip assertion in
+        // create_question_test.php; harmless for save_question_options() either way.
+        $this->assertSame([1.0, 0.0, 0.0], array_map('floatval', $formdata->fraction));
+        $this->assertSame(1, $formdata->single);
+    }
+
+    /**
+     * Tests that two correct answers among several split the fraction evenly, when $single is
+     * false — the same derivation multichoice questiontype itself requires (sum of fractions
+     * across correct answers must equal 1.0).
+     *
+     * @return void
+     */
+    public function test_build_multichoice_formdata_derives_multiple_correct_fraction(): void {
+        $formdata = question_service::build_multichoice_formdata([
+            ['text' => 'One', 'correct' => true],
+            ['text' => 'Two', 'correct' => true],
+            ['text' => 'Three', 'correct' => false],
+        ], false);
+
+        $this->assertSame([0.5, 0.5, 0.0], $formdata->fraction);
+        $this->assertSame(0, $formdata->single);
+    }
+
+    /**
+     * Tests that empty-text answers are dropped before the "at least two answers" check, so a
+     * caller (e.g. an AI response with a blank slot) cannot satisfy the count with a hollow entry.
+     *
+     * @return void
+     */
+    public function test_build_multichoice_formdata_ignores_blank_answers(): void {
+        $this->expectException(\moodle_exception::class);
+
+        question_service::build_multichoice_formdata([
+            ['text' => 'One', 'correct' => true],
+            ['text' => '', 'correct' => false],
+        ], true);
+    }
+
+    /**
+     * Tests that no answer marked correct is rejected, rather than silently building a question
+     * nobody can ever answer correctly.
+     *
+     * @return void
+     */
+    public function test_build_multichoice_formdata_throws_without_correct_answer(): void {
+        $this->expectException(\moodle_exception::class);
+
+        question_service::build_multichoice_formdata([
+            ['text' => 'One', 'correct' => false],
+            ['text' => 'Two', 'correct' => false],
+        ], true);
+    }
+
+    /**
+     * Tests that more than one correct answer is rejected when $single is true — this is exactly
+     * the constraint qtype_multichoice::save_question_options() itself enforces, checked here
+     * before save_question() is ever reached.
+     *
+     * @return void
+     */
+    public function test_build_multichoice_formdata_throws_with_multiple_correct_when_single(): void {
+        $this->expectException(\moodle_exception::class);
+
+        question_service::build_multichoice_formdata([
+            ['text' => 'One', 'correct' => true],
+            ['text' => 'Two', 'correct' => true],
+        ], true);
+    }
+
+    /**
+     * Tests that build_essay_formdata() returns the minimal field set qtype_essay's own
+     * save_question_options() requires (mirroring core's own qtype_essay test helper).
+     *
+     * @return void
+     */
+    public function test_build_essay_formdata_returns_expected_fields(): void {
+        $formdata = question_service::build_essay_formdata();
+
+        $this->assertSame('editor', $formdata->responseformat);
+        $this->assertSame(1, $formdata->responserequired);
+        $this->assertSame(10, $formdata->responsefieldlines);
+        $this->assertSame(0, $formdata->attachments);
+        $this->assertSame(0, $formdata->attachmentsrequired);
+        $this->assertSame(['text' => '', 'format' => FORMAT_HTML], $formdata->graderinfo);
+    }
+
+    /**
+     * Tests that an essay question built via build_essay_formdata() is actually accepted by the
+     * official save path, end to end — not just that the individual fields look right in
+     * isolation.
+     *
+     * @return void
+     */
+    public function test_create_question_writes_a_real_essay_question(): void {
+        global $DB;
+
+        $context = $this->create_module_context();
+        $categoryid = question_service::get_or_create_category($context);
+
+        $formdata = (object) [
+            'name' => 'Explain photosynthesis',
+            'questiontext' => ['text' => 'Explain photosynthesis in your own words.', 'format' => FORMAT_HTML],
+            'generalfeedback' => ['text' => '', 'format' => FORMAT_HTML],
+            'defaultmark' => 1,
+            'penalty' => 0,
+        ];
+        foreach (get_object_vars(question_service::build_essay_formdata()) as $field => $value) {
+            $formdata->$field = $value;
+        }
+
+        $questionid = question_service::create_question('essay', $categoryid, $context->id, $formdata);
+
+        $question = $DB->get_record('question', ['id' => $questionid], '*', MUST_EXIST);
+        $this->assertSame('essay', $question->qtype);
+        $this->assertSame('Explain photosynthesis', $question->name);
+    }
 }

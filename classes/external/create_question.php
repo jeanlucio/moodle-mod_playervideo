@@ -142,55 +142,15 @@ class create_question extends external_api {
             $formdata->feedbacktrue = ['text' => '', 'format' => FORMAT_HTML];
             $formdata->feedbackfalse = ['text' => '', 'format' => FORMAT_HTML];
         } else {
-            self::apply_multichoice_answers($formdata, $params['answers'], $params['single']);
+            $multichoice = question_service::build_multichoice_formdata($params['answers'], $params['single']);
+            foreach (get_object_vars($multichoice) as $field => $value) {
+                $formdata->$field = $value;
+            }
         }
 
         $questionid = question_service::create_question($params['qtype'], $categoryid, $context->id, $formdata);
 
         return ['questionid' => $questionid];
-    }
-
-    /**
-     * Builds the answer/fraction/feedback arrays qtype_multichoice::save_question_options()
-     * expects, from the plugin's own simpler {text, correct} shape.
-     *
-     * @param stdClass $formdata Form data being assembled, modified by reference.
-     * @param array $answers The {text, correct} answers from the WS parameters.
-     * @param bool $single Single vs multiple correct answer(s).
-     * @return void
-     */
-    private static function apply_multichoice_answers(stdClass $formdata, array $answers, bool $single): void {
-        $nonempty = array_values(array_filter($answers, static fn(array $a): bool => trim($a['text']) !== ''));
-        if (count($nonempty) < 2) {
-            throw new moodle_exception('error_notenoughanswers', 'mod_playervideo');
-        }
-
-        $correctcount = count(array_filter($nonempty, static fn(array $a): bool => $a['correct']));
-        if ($correctcount === 0) {
-            throw new moodle_exception('error_nocorrectanswer', 'mod_playervideo');
-        }
-        if ($single && $correctcount > 1) {
-            throw new moodle_exception('error_onlyonecorrectanswer', 'mod_playervideo');
-        }
-
-        $correctfraction = 1 / $correctcount;
-
-        $formdata->answer = [];
-        $formdata->fraction = [];
-        $formdata->feedback = [];
-        foreach ($nonempty as $answer) {
-            $formdata->answer[] = ['text' => $answer['text'], 'format' => FORMAT_HTML];
-            $formdata->fraction[] = $answer['correct'] ? $correctfraction : 0.0;
-            $formdata->feedback[] = ['text' => '', 'format' => FORMAT_HTML];
-        }
-
-        $formdata->single = $single ? 1 : 0;
-        $formdata->shuffleanswers = 1;
-        $formdata->answernumbering = 'abc';
-        $formdata->correctfeedback = ['text' => '', 'format' => FORMAT_HTML];
-        $formdata->partiallycorrectfeedback = ['text' => '', 'format' => FORMAT_HTML];
-        $formdata->incorrectfeedback = ['text' => '', 'format' => FORMAT_HTML];
-        $formdata->showstandardinstruction = 0;
     }
 
     /**

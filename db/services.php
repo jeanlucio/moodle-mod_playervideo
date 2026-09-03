@@ -113,4 +113,20 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/playervideo:attempt',
     ],
+    'mod_playervideo_generate_question_ai' => [
+        'classname' => 'mod_playervideo\external\generate_question_ai',
+        'methodname' => 'execute',
+        'description' => 'Generates one question by AI for a given timestamp, pending teacher review.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/playervideo:manage,moodle/question:add',
+    ],
+    'mod_playervideo_generate_questions_batch' => [
+        'classname' => 'mod_playervideo\external\generate_questions_batch',
+        'methodname' => 'execute',
+        'description' => 'Generates several questions by AI from a pasted transcript, pending teacher review.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/playervideo:manage,moodle/question:add',
+    ],
 ];

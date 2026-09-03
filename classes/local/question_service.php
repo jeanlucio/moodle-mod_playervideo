@@ -120,6 +120,84 @@ class question_service {
     }
 
     /**
+     * Builds the answer/fraction/feedback arrays qtype_multichoice::save_question_options()
+     * expects, from the plugin's own simpler {text, correct} shape.
+     *
+     * Shared by the "create here" form and the AI generators (point-to-point and batch) so the
+     * fraction derivation — the one part of this that must satisfy save_question()'s own sanity
+     * check (max fraction == 1 for single, sum of fractions == 1 for multiple) — is written once.
+     *
+     * @param array $answers The {text, correct} answers, from a WS parameter or an AI response.
+     * @param bool $single Single vs multiple correct answer(s).
+     * @return stdClass Partial form data: answer, fraction, feedback and the qtype's other
+     *      required multichoice-specific fields.
+     * @throws \moodle_exception If fewer than two non-empty answers are given, if none is marked
+     *      correct, or if more than one is marked correct while $single is true.
+     */
+    public static function build_multichoice_formdata(array $answers, bool $single): stdClass {
+        $nonempty = array_values(array_filter($answers, static fn(array $a): bool => trim($a['text']) !== ''));
+        if (count($nonempty) < 2) {
+            throw new \moodle_exception('error_notenoughanswers', 'mod_playervideo');
+        }
+
+        $correctcount = count(array_filter($nonempty, static fn(array $a): bool => $a['correct']));
+        if ($correctcount === 0) {
+            throw new \moodle_exception('error_nocorrectanswer', 'mod_playervideo');
+        }
+        if ($single && $correctcount > 1) {
+            throw new \moodle_exception('error_onlyonecorrectanswer', 'mod_playervideo');
+        }
+
+        $correctfraction = 1 / $correctcount;
+
+        $formdata = new stdClass();
+        $formdata->answer = [];
+        $formdata->fraction = [];
+        $formdata->feedback = [];
+        foreach ($nonempty as $answer) {
+            $formdata->answer[] = ['text' => $answer['text'], 'format' => FORMAT_HTML];
+            $formdata->fraction[] = $answer['correct'] ? $correctfraction : 0.0;
+            $formdata->feedback[] = ['text' => '', 'format' => FORMAT_HTML];
+        }
+
+        $formdata->single = $single ? 1 : 0;
+        $formdata->shuffleanswers = 1;
+        $formdata->answernumbering = 'abc';
+        $formdata->correctfeedback = ['text' => '', 'format' => FORMAT_HTML];
+        $formdata->partiallycorrectfeedback = ['text' => '', 'format' => FORMAT_HTML];
+        $formdata->incorrectfeedback = ['text' => '', 'format' => FORMAT_HTML];
+        $formdata->showstandardinstruction = 0;
+
+        return $formdata;
+    }
+
+    /**
+     * Builds the minimal form data qtype_essay::save_question_options() expects.
+     *
+     * Only the AI generators (point-to-point and batch) create essay questions today — the
+     * manual "create here" form only supports multichoice/truefalse (an existing question can
+     * still be pulled from the bank regardless of qtype via "search_questions"). Field values
+     * mirror core's own qtype_essay test helper (question/type/essay/tests/helper.php): a plain
+     * editor response box, no attachments, no word limit, empty grader guidance/template.
+     *
+     * @return stdClass Partial form data for an essay question.
+     */
+    public static function build_essay_formdata(): stdClass {
+        $formdata = new stdClass();
+        $formdata->responseformat = 'editor';
+        $formdata->responserequired = 1;
+        $formdata->responsefieldlines = 10;
+        $formdata->minwordlimit = null;
+        $formdata->maxwordlimit = null;
+        $formdata->attachments = 0;
+        $formdata->attachmentsrequired = 0;
+        $formdata->graderinfo = ['text' => '', 'format' => FORMAT_HTML];
+        $formdata->responsetemplate = ['text' => '', 'format' => FORMAT_HTML];
+
+        return $formdata;
+    }
+
+    /**
      * Returns a question formatted for the frontend, without revealing the correct answer.
      *
      * @param int $questionid The question id.
