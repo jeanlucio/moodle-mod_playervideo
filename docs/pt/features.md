@@ -27,7 +27,8 @@
   tentativa.
 * ⏳ **Nota Retida Até Toda Questão Aberta Ser Corrigida:** Uma tentativa com resposta
   dissertativa pendente nunca chega ao Diário de Notas com uma nota parcial — ela permanece
-  `pendingcorrection` até que um professor (com apoio de IA, veja abaixo) confirme a última.
+  `pendingcorrection` até que um professor (com apoio opcional de IA, veja abaixo) confirme a
+  última.
 * 🌐 **Legenda Manual, Mesclada com Faixas Nativas:** O professor pode escrever uma legenda
   (VTT, colada como "timestamp + texto" ou como um `.vtt` real) por idioma; o seletor de
   legenda do estudante mescla com qualquer legenda nativa que YouTube/Vimeo já exponham pra

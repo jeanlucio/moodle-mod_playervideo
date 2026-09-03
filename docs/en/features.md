@@ -26,7 +26,8 @@
   or none at all, aggregating the final grade by highest, average, first or last attempt.
 * ⏳ **Grade Withheld Until Every Open Question Is Graded:** An attempt with a pending essay
   response never reaches the Gradebook early with a partial score — it stays
-  `pendingcorrection` until a teacher (with AI assistance, see below) confirms the last one.
+  `pendingcorrection` until a teacher (optionally with AI assistance, see below) confirms the
+  last one.
 * 🌐 **Manual Captions, Merged With Native Tracks:** A teacher can author a caption track (VTT,
   pasted as plain "timestamp + text" or real VTT) per language; the student's caption selector
   merges it with whatever native captions YouTube/Vimeo already expose for that video, in one
