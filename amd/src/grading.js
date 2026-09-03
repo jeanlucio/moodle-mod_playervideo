@@ -150,9 +150,7 @@ const renderCard = async(response) => {
             const result = await call('mod_playervideo_generate_response_correction', {
                 responseid: response.responseid,
             });
-            card.querySelector(`#playervideo-grade-${response.responseid}`).value = result.aigrade;
-            card.querySelector(`#playervideo-feedback-${response.responseid}`).value = result.aifeedback;
-            renderAiBlock(card, result.aifeedback, aisuggestionlabel);
+            await applySuggestion(response, result, aisuggestionlabel);
         } catch (error) {
             showError(error);
         } finally {
@@ -186,6 +184,75 @@ const renderCard = async(response) => {
 };
 
 /**
+ * Applies a freshly generated suggestion to the still-open card for one response, if it is
+ * still on screen — shared by the single "Generate" button and the "Generate all" batch action
+ * so the two paths never drift on how a suggestion gets rendered.
+ *
+ * @param {object} response The response the suggestion belongs to.
+ * @param {object} result generate_response_correction's return value.
+ * @param {string} aisuggestionlabel Localised "AI suggestion" label.
+ */
+const applySuggestion = async(response, result, aisuggestionlabel) => {
+    const card = document.querySelector(`[data-responseid="${response.responseid}"]`);
+    if (!card) {
+        return;
+    }
+    card.querySelector(`#playervideo-grade-${response.responseid}`).value = result.aigrade;
+    card.querySelector(`#playervideo-feedback-${response.responseid}`).value = result.aifeedback;
+    renderAiBlock(card, result.aifeedback, aisuggestionlabel);
+};
+
+/**
+ * Renders the "generate all" button, offered above the queue whenever at least one response has
+ * no AI suggestion yet — spares the teacher from clicking "Generate" once per response. Requests
+ * run one at a time (never in parallel): a real AI provider's own per-minute token limit can
+ * reject a burst of simultaneous calls, and one failure must never stop the rest of the batch —
+ * same principle already applied to the batch question generator (Fase 4a).
+ *
+ * @param {Array} pending The full pending queue, as returned by get_pending_corrections.
+ * @returns {Promise<HTMLElement|null>} The button, or null if every response already has one.
+ */
+const renderGenerateAllButton = async(pending) => {
+    const targets = pending.filter((response) => response.aigrade === null);
+    if (targets.length === 0) {
+        return null;
+    }
+
+    const [label, workinglabel, aisuggestionlabel] = await Promise.all([
+        getString('generateallsuggestions', 'mod_playervideo', targets.length),
+        getString('generatingsuggestions', 'mod_playervideo'),
+        getString('aisuggestionlabel', 'mod_playervideo'),
+    ]);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-outline-secondary btn-sm mb-3';
+    button.textContent = label;
+
+    button.addEventListener('click', async() => {
+        button.disabled = true;
+        button.textContent = workinglabel;
+
+        for (const response of targets) {
+            try {
+                const result = await call('mod_playervideo_generate_response_correction', {
+                    responseid: response.responseid,
+                });
+                await applySuggestion(response, result, aisuggestionlabel);
+            } catch (error) {
+                // Keep going — a card whose generation failed just keeps its "Generate" button,
+                // same as if the teacher had never clicked "generate all" in the first place.
+                continue;
+            }
+        }
+
+        button.remove();
+    });
+
+    return button;
+};
+
+/**
  * Loads and renders the whole pending-correction queue.
  *
  * @returns {Promise<void>}
@@ -203,6 +270,11 @@ const loadPending = async() => {
             empty.textContent = await getString('nopendingcorrections', 'mod_playervideo');
             container.appendChild(empty);
             return;
+        }
+
+        const generateallbutton = await renderGenerateAllButton(result.responses);
+        if (generateallbutton) {
+            container.appendChild(generateallbutton);
         }
 
         for (const response of result.responses) {
