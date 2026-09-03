@@ -23,8 +23,7 @@
   seeking past what has actually been watched is blocked server-side (configurable per
   activity), rewinding is always free.
 * 🔁 **Multiple Attempts & Grade Aggregation:** An activity can allow a fixed number of attempts
-  or none at all, aggregating the final grade by highest, average, first or last attempt — the
-  same convention used across the Player ecosystem.
+  or none at all, aggregating the final grade by highest, average, first or last attempt.
 * ⏳ **Grade Withheld Until Every Open Question Is Graded:** An attempt with a pending essay
   response never reaches the Gradebook early with a partial score — it stays
   `pendingcorrection` until a teacher (with AI assistance, see below) confirms the last one.

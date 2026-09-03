@@ -24,7 +24,7 @@
   servidor (configurável por atividade); retroceder é sempre livre.
 * 🔁 **Múltiplas Tentativas e Agregação de Nota:** Uma atividade pode permitir um número fixo de
   tentativas ou nenhum limite, agregando a nota final pela maior, média, primeira ou última
-  tentativa — a mesma convenção usada em todo o ecossistema Player.
+  tentativa.
 * ⏳ **Nota Retida Até Toda Questão Aberta Ser Corrigida:** Uma tentativa com resposta
   dissertativa pendente nunca chega ao Diário de Notas com uma nota parcial — ela permanece
   `pendingcorrection` até que um professor (com apoio de IA, veja abaixo) confirme a última.
