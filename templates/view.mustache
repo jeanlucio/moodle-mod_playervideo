@@ -70,6 +70,16 @@
         {{#canstart}}
         <button type="button" class="btn btn-primary" id="playervideo-start-btn">{{startbuttonlabel}}</button>
         {{/canstart}}
+        <div class="playervideo-accessibility-links mt-2">
+            {{#hasdisummary}}
+            <button type="button" class="btn btn-link p-0" id="playervideo-disummary-btn">
+                {{#str}}disummary, mod_playervideo{{/str}}
+            </button>
+            {{/hasdisummary}}
+            <a href="{{transcripturl}}" id="playervideo-transcript-link">
+                {{#str}}transcriptmode, mod_playervideo{{/str}}
+            </a>
+        </div>
         {{/canattempt}}
     </div>
 

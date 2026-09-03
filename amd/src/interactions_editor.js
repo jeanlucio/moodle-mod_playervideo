@@ -708,7 +708,11 @@ const openCaptionsModal = async() => {
                     lang,
                     'delete': true,
                 });
-                await reload();
+                try {
+        await reload();
+    } catch (error) {
+        showError(error);
+    }
                 Notification.addNotification({
                     message: await getString('captiondeleted', 'mod_playervideo'),
                     type: 'success',
@@ -720,7 +724,211 @@ const openCaptionsModal = async() => {
         confirmmodal.show();
     });
 
-    await reload();
+    try {
+        await reload();
+    } catch (error) {
+        showError(error);
+    }
+};
+
+/**
+ * Opens the easy-read (DI) summary modal: pick a language that already has a caption, generate
+ * a summary by AI from that caption's text, edit it, and approve it (or leave it pending) — a
+ * summary is never shown to a student until approved (see the plugin SCOPE, "Resumo por IA em
+ * leitura fácil"). Needs at least one caption to exist first, since generation reads from it.
+ *
+ * @returns {Promise<void>}
+ */
+const openDiSummaryModal = async() => {
+    const [
+        title, langlabel, contentlabel, generatestr, savestr, approvestr, approvedstr, deletestr, nocaptionsstr,
+    ] = await Promise.all([
+        getString('disummary', 'mod_playervideo'),
+        getString('captionlanguage', 'mod_playervideo'),
+        getString('disummary', 'mod_playervideo'),
+        getString('generate', 'mod_playervideo'),
+        getString('save', 'moodle'),
+        getString('approve', 'mod_playervideo'),
+        getString('approved', 'mod_playervideo'),
+        getString('delete', 'moodle'),
+        getString('nocaptionsyet', 'mod_playervideo'),
+    ]);
+
+    const body = `
+        <div class="alert alert-info" id="playervideo-disummary-nocaptions">${escapeHtml(nocaptionsstr)}</div>
+        <div id="playervideo-disummary-form" hidden>
+            <label class="playervideo-field-label" for="playervideo-disummary-lang-select">
+                ${escapeHtml(langlabel)}
+            </label>
+            <select class="form-select mb-2" id="playervideo-disummary-lang-select"></select>
+            <div id="playervideo-disummary-status" class="mb-2"></div>
+            <label class="playervideo-field-label" for="playervideo-disummary-content">
+                ${escapeHtml(contentlabel)}
+            </label>
+            <textarea class="form-control mb-2" id="playervideo-disummary-content" rows="8"></textarea>
+            <button type="button" class="btn btn-outline-secondary" id="playervideo-disummary-generate-btn">
+                ${escapeHtml(generatestr)}
+            </button>
+            <button type="button" class="btn btn-primary" id="playervideo-disummary-save-btn">
+                ${escapeHtml(savestr)}
+            </button>
+            <button type="button" class="btn btn-success" id="playervideo-disummary-approve-btn">
+                ${escapeHtml(approvestr)}
+            </button>
+            <button type="button" class="btn btn-outline-danger" id="playervideo-disummary-delete-btn" hidden>
+                ${escapeHtml(deletestr)}
+            </button>
+        </div>
+    `;
+
+    const modal = await Modal.create({title, body, large: true, removeOnClose: true, show: true});
+    const root = modal.getRoot()[0];
+    const select = root.querySelector('#playervideo-disummary-lang-select');
+    const statusdiv = root.querySelector('#playervideo-disummary-status');
+    const contenttextarea = root.querySelector('#playervideo-disummary-content');
+    const approvebutton = root.querySelector('#playervideo-disummary-approve-btn');
+    const deletebutton = root.querySelector('#playervideo-disummary-delete-btn');
+
+    let captionlangs = [];
+    let summaries = [];
+
+    const pendingstr = await getString('pending', 'mod_playervideo');
+
+    const renderStatus = (status) => {
+        if (status === 'approved') {
+            statusdiv.innerHTML = `<span class="badge bg-success">${escapeHtml(approvedstr)}</span>`;
+            deletebutton.hidden = false;
+        } else if (status === 'pending') {
+            statusdiv.innerHTML = `<span class="badge bg-warning text-dark">${escapeHtml(pendingstr)}</span>`;
+            deletebutton.hidden = false;
+        } else {
+            statusdiv.innerHTML = '';
+            deletebutton.hidden = true;
+        }
+    };
+
+    const applySelection = () => {
+        const summary = summaries.find((item) => item.lang === select.value);
+        contenttextarea.value = summary ? summary.content : '';
+        renderStatus(summary ? summary.status : '');
+    };
+
+    const reload = async(selectlang) => {
+        const [captionsresult, summariesresult] = await Promise.all([
+            call('mod_playervideo_get_captions', {playervideoid: editorData.playervideoid}),
+            call('mod_playervideo_get_di_summaries', {playervideoid: editorData.playervideoid}),
+        ]);
+        captionlangs = captionsresult.captions.map((caption) => caption.lang);
+        summaries = summariesresult.summaries;
+
+        root.querySelector('#playervideo-disummary-nocaptions').hidden = captionlangs.length > 0;
+        root.querySelector('#playervideo-disummary-form').hidden = captionlangs.length === 0;
+        if (captionlangs.length === 0) {
+            return;
+        }
+
+        select.innerHTML = captionlangs.map((lang) => `<option value="${escapeHtml(lang)}">${escapeHtml(lang)}</option>`).join('');
+        select.value = selectlang && captionlangs.includes(selectlang) ? selectlang : captionlangs[0];
+        applySelection();
+    };
+
+    select.addEventListener('change', applySelection);
+
+    root.querySelector('#playervideo-disummary-generate-btn').addEventListener('click', async(event) => {
+        const button = event.target;
+        button.disabled = true;
+        try {
+            const result = await call('mod_playervideo_generate_di_summary', {
+                playervideoid: editorData.playervideoid,
+                lang: select.value,
+            });
+            contenttextarea.value = result.content;
+            renderStatus(result.status);
+        } catch (error) {
+            showError(error);
+        } finally {
+            button.disabled = false;
+        }
+    });
+
+    const saveWithApproval = async(approved) => {
+        await call('mod_playervideo_save_di_summary', {
+            playervideoid: editorData.playervideoid,
+            lang: select.value,
+            content: contenttextarea.value,
+            approved,
+        });
+        await reload(select.value);
+        Notification.addNotification({
+            message: await getString('disummarysaved', 'mod_playervideo'),
+            type: 'success',
+        });
+    };
+
+    root.querySelector('#playervideo-disummary-save-btn').addEventListener('click', async(event) => {
+        const button = event.target;
+        const existing = summaries.find((item) => item.lang === select.value);
+        button.disabled = true;
+        try {
+            await saveWithApproval(existing ? existing.status === 'approved' : false);
+        } catch (error) {
+            showError(error);
+        } finally {
+            button.disabled = false;
+        }
+    });
+
+    approvebutton.addEventListener('click', async() => {
+        approvebutton.disabled = true;
+        try {
+            if (contenttextarea.value.trim() === '') {
+                Notification.alert('', await getString('error_disummarycontentrequired', 'mod_playervideo'));
+                return;
+            }
+            await saveWithApproval(true);
+        } catch (error) {
+            showError(error);
+        } finally {
+            approvebutton.disabled = false;
+        }
+    });
+
+    deletebutton.addEventListener('click', async() => {
+        const lang = select.value;
+        const [confirmtitle, confirmbody] = await Promise.all([
+            getString('confirm', 'moodle'),
+            getString('confirmdeletedisummary', 'mod_playervideo', lang),
+        ]);
+        const confirmmodal = await ModalSaveCancel.create({title: confirmtitle, body: confirmbody, removeOnClose: true});
+        confirmmodal.setSaveButtonText(deletestr);
+        confirmmodal.getRoot().on(ModalEvents.save, async() => {
+            try {
+                await call('mod_playervideo_save_di_summary', {
+                    playervideoid: editorData.playervideoid,
+                    lang,
+                    'delete': true,
+                });
+                try {
+        await reload();
+    } catch (error) {
+        showError(error);
+    }
+                Notification.addNotification({
+                    message: await getString('disummarydeleted', 'mod_playervideo'),
+                    type: 'success',
+                });
+            } catch (error) {
+                showError(error);
+            }
+        });
+        confirmmodal.show();
+    });
+
+    try {
+        await reload();
+    } catch (error) {
+        showError(error);
+    }
 };
 
 /**
@@ -1345,6 +1553,7 @@ const initTimelineClick = () => {
 
     document.getElementById('playervideo-generate-batch-btn').addEventListener('click', openBatchGenerateModal);
     document.getElementById('playervideo-manage-captions-btn').addEventListener('click', openCaptionsModal);
+    document.getElementById('playervideo-manage-disummary-btn').addEventListener('click', openDiSummaryModal);
 
     document.getElementById('playervideo-playpause-btn').addEventListener('click', togglePlayPause);
 };

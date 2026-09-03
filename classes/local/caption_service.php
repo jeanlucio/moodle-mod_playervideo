@@ -206,4 +206,63 @@ final class caption_service {
         $seconds = $totalseconds % 60;
         return sprintf('%02d:%02d:%02d.000', $hours, $minutes, $seconds);
     }
+
+    /**
+     * Parses a VTT document into a flat list of cues.
+     *
+     * Deliberately minimal — cue identifiers and styling are ignored, a cue is exactly
+     * {start, end, text} — mirroring the client-side parser in amd/src/player.js, since this
+     * only ever reads back what this class itself wrote or passed through, never an arbitrary
+     * third-party file. Shared by {@see extract_plain_text()} and by
+     * {@see \mod_playervideo\local\blind_mode_service}, which needs real cue boundaries (not
+     * just concatenated text) to interleave captions with interactions by timestamp.
+     *
+     * @param string $vtt A VTT document.
+     * @return array Cues, in file order — each shaped {start: float, end: float, text: string}.
+     */
+    public static function parse_cues(string $vtt): array {
+        $timelinepattern = '/(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[.,](\d{3})/';
+        $toseconds = static fn(string $h, string $m, string $s, string $ms): float =>
+            ((int) $h * 3600) + ((int) $m * 60) + (int) $s + ((int) $ms / 1000);
+
+        $cues = [];
+        foreach (preg_split('/\n\n+/', str_replace("\r", '', $vtt)) as $block) {
+            $lines = array_values(array_filter(explode("\n", $block), static fn(string $line): bool => trim($line) !== ''));
+            $timelineindex = null;
+            foreach ($lines as $index => $line) {
+                if (preg_match($timelinepattern, $line)) {
+                    $timelineindex = $index;
+                    break;
+                }
+            }
+            if ($timelineindex === null) {
+                continue;
+            }
+            preg_match($timelinepattern, $lines[$timelineindex], $matches);
+            $text = trim(implode(' ', array_slice($lines, $timelineindex + 1)));
+            if ($text === '') {
+                continue;
+            }
+            $cues[] = [
+                'start' => $toseconds($matches[1], $matches[2], $matches[3], $matches[4]),
+                'end' => $toseconds($matches[5], $matches[6], $matches[7], $matches[8]),
+                'text' => $text,
+            ];
+        }
+        return $cues;
+    }
+
+    /**
+     * Extracts the plain concatenated text of a VTT document, discarding all timing — the
+     * source text for the DI easy-read summary prompt (see
+     * {@see \mod_playervideo\external\generate_di_summary}), which only needs the narrative
+     * content, not when each line was said.
+     *
+     * @param string $vtt A VTT document.
+     * @return string Every cue's text, joined by a space.
+     */
+    public static function extract_plain_text(string $vtt): string {
+        $texts = array_map(static fn(array $cue): string => $cue['text'], self::parse_cues($vtt));
+        return trim(implode(' ', $texts));
+    }
 }

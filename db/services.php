@@ -145,4 +145,28 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/playervideo:manage',
     ],
+    'mod_playervideo_generate_di_summary' => [
+        'classname' => 'mod_playervideo\external\generate_di_summary',
+        'methodname' => 'execute',
+        'description' => 'Generates an easy-read (DI) summary by AI from a caption, pending teacher review.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/playervideo:manage',
+    ],
+    'mod_playervideo_save_di_summary' => [
+        'classname' => 'mod_playervideo\external\save_di_summary',
+        'methodname' => 'execute',
+        'description' => 'Edits, approves or deletes an easy-read (DI) summary.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/playervideo:manage',
+    ],
+    'mod_playervideo_get_di_summaries' => [
+        'classname' => 'mod_playervideo\external\get_di_summaries',
+        'methodname' => 'execute',
+        'description' => 'Lists the easy-read (DI) summaries visible to the current user.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'mod/playervideo:view',
+    ],
 ];

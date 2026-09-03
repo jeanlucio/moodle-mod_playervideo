@@ -97,5 +97,27 @@ function xmldb_playervideo_upgrade(int $oldversion): bool {
         upgrade_mod_savepoint(true, 2026083105, 'playervideo');
     }
 
+    if ($oldversion < 2026090303) {
+        $table = new xmldb_table('playervideo_disummaries');
+
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('playervideoid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('lang', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('content', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null);
+            $table->add_field('status', XMLDB_TYPE_CHAR, '20', null, XMLDB_NOTNULL, null, 'pending');
+            $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('playervideoid', XMLDB_KEY_FOREIGN, ['playervideoid'], 'playervideo', ['id']);
+            $table->add_index('playervideoid-lang', XMLDB_INDEX_UNIQUE, ['playervideoid', 'lang']);
+
+            $dbman->create_table($table);
+        }
+
+        upgrade_mod_savepoint(true, 2026090303, 'playervideo');
+    }
+
     return true;
 }

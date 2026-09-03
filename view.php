@@ -25,6 +25,7 @@
 require(__DIR__ . '/../../config.php');
 
 use mod_playervideo\local\attempt_manager;
+use mod_playervideo\local\di_summary_service;
 use mod_playervideo\local\intro_service;
 use mod_playervideo\local\question_service;
 use mod_playervideo\local\video_source;
@@ -149,6 +150,20 @@ if ($shouldautoshowintro) {
 
 $progress = $DB->get_record('playervideo_progress', ['playervideoid' => $instance->id, 'userid' => $userid]);
 
+// Approved DI summaries only — a still-pending one is never shown to a student (§4, "Resumo por
+// IA em leitura fácil"). Prefer the one matching the user's current language, else the first
+// approved one alphabetically; embedded directly here since the page already has this data,
+// avoiding a second round-trip just to populate the summary modal on click.
+$approvedsummary = null;
+foreach (di_summary_service::get_summaries($instance->id) as $summary) {
+    if ($summary->status !== di_summary_service::STATUS_APPROVED) {
+        continue;
+    }
+    if ($approvedsummary === null || $summary->lang === current_language()) {
+        $approvedsummary = $summary;
+    }
+}
+
 $playerdata = [
     'playervideoid' => (int) $instance->id,
     'videotype' => $instance->videotype,
@@ -159,6 +174,7 @@ $playerdata = [
     'interactions' => $interactions,
     'lastposition' => $progress !== false && $progress->lastposition !== null ? (float) $progress->lastposition : null,
     'segments' => $progress !== false && $progress->segments !== null ? $progress->segments : '[]',
+    'disummary' => $approvedsummary !== null ? $approvedsummary->content : null,
 ];
 
 echo $OUTPUT->header();
@@ -174,6 +190,8 @@ echo $OUTPUT->render_from_template('mod_playervideo/view', [
     'startbuttonlabel' => $startbuttonlabel,
     'pendingcorrectionnotice' => $pendingcorrectionnotice,
     'previousattempts' => $previousattempts,
+    'hasdisummary' => $approvedsummary !== null,
+    'transcripturl' => (new moodle_url('/mod/playervideo/transcript.php', ['id' => $cm->id]))->out(false),
 ]);
 
 $PAGE->requires->js_call_amd('mod_playervideo/onboarding', 'init', [$shouldautoshowintro]);

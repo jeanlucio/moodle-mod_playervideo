@@ -25,6 +25,7 @@
  */
 
 import Ajax from 'core/ajax';
+import Modal from 'core/modal';
 import Notification from 'core/notification';
 import Templates from 'core/templates';
 import {getString} from 'core/str';
@@ -952,6 +953,28 @@ const startOrResumeAttempt = async() => {
 const readPlayerData = () => JSON.parse(document.getElementById('playervideo-player-data').textContent);
 
 /**
+ * Shows the approved DI easy-read summary in a modal.
+ *
+ * The stored summary text is AI-sourced content and must never be trusted as HTML (see the
+ * project's rule against {{{triple-mustache}}}-style trust for stored/AI content) — escaped
+ * here via a throwaway element's textContent/innerHTML round-trip before it ever reaches
+ * {@see Modal.create}'s body string.
+ *
+ * @returns {Promise<void>}
+ */
+const showDiSummary = async() => {
+    const title = await getString('disummary', 'mod_playervideo');
+    const escaped = document.createElement('div');
+    escaped.textContent = playerData.disummary;
+    await Modal.create({
+        title,
+        body: `<p class="playervideo-disummary-text">${escaped.innerHTML}</p>`,
+        removeOnClose: true,
+        show: true,
+    });
+};
+
+/**
  * Initialises the activity page: wires the start button and every "review this attempt"
  * button on the start screen.
  */
@@ -966,4 +989,5 @@ export const init = () => {
     });
 
     document.getElementById('playervideo-finish-btn')?.addEventListener('click', () => finishAttempt(false));
+    document.getElementById('playervideo-disummary-btn')?.addEventListener('click', showDiSummary);
 };

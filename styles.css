@@ -676,3 +676,20 @@ video.ph-video-embed {
     border-radius: 999px;
     transition: width 0.3s ease;
 }
+
+.path-mod-playervideo .playervideo-accessibility-links {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.9rem;
+}
+
+/*
+ * Not scoped under .path-mod-playervideo: core/modal hoists its markup to <body> before
+ * showing it (see the Bootstrap Modals convention in CLAUDE.md), breaking ancestor scope —
+ * same exception already applied to .ph-video-embed above. The DI summary text is stored as
+ * plain lines (an easy-read paragraph per idea, see di_summary_service), not FORMAT_HTML —
+ * pre-line keeps each line break visible without converting the stored text to <p> tags.
+ */
+.playervideo-disummary-text {
+    white-space: pre-line;
+}
