@@ -19,7 +19,7 @@
  * submit_answer/finish_attempt) the video player uses — a first-class alternate route, not an
  * adaptation of the video screen (see the plugin SCOPE, "Modo texto-only").
  *
- * @module     mod_playervideo/blind_mode
+ * @module     mod_playervideo/transcript
  * @copyright  2026 Jean Lúcio
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */

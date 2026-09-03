@@ -15,11 +15,11 @@
     along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 }}
 {{!
-    @template mod_playervideo/blind_mode
+    @template mod_playervideo/transcript
 
     Text-only linear document: the activity's caption text and interactions merged by
     timestamp, for a student navigating with a screen reader (see the plugin SCOPE, "Modo
-    texto-only"). amd/src/blind_mode.js fills #playervideo-transcript-blocks from the data
+    texto-only"). amd/src/transcript.js fills #playervideo-transcript-blocks from the data
     island transcript.php embeds; this template only renders the static shell.
 
     Example context (json):
@@ -27,7 +27,7 @@
         "backtovideourl": "https://example.com/mod/playervideo/view.php?id=5"
     }
 }}
-<div class="path-mod-playervideo playervideo-blind-mode">
+<div class="path-mod-playervideo playervideo-transcript">
     <div id="playervideo-transcript-announcer" class="visually-hidden" aria-live="polite"></div>
     <p>
         <a href="{{backtovideourl}}" id="playervideo-back-to-video">

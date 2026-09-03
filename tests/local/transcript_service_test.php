@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Unit tests for the blind-mode (text-only) document builder.
+ * Unit tests for the transcript (text-only) document builder.
  *
  * @package    mod_playervideo
  * @category   test
@@ -26,11 +26,11 @@
 namespace mod_playervideo\local;
 
 /**
- * Tests for blind_mode_service.
+ * Tests for transcript_service.
  *
- * @covers \mod_playervideo\local\blind_mode_service
+ * @covers \mod_playervideo\local\transcript_service
  */
-final class blind_mode_service_test extends \advanced_testcase {
+final class transcript_service_test extends \advanced_testcase {
     #[\Override]
     protected function setUp(): void {
         parent::setUp();
@@ -65,7 +65,7 @@ final class blind_mode_service_test extends \advanced_testcase {
             'timemodified' => time(),
         ]);
 
-        $blocks = blind_mode_service::build_document($instance, $context);
+        $blocks = transcript_service::build_document($instance, $context);
 
         $this->assertCount(3, $blocks);
         $this->assertSame('text', $blocks[0]['kind']);
@@ -103,7 +103,7 @@ final class blind_mode_service_test extends \advanced_testcase {
             'timemodified' => time(),
         ]);
 
-        $blocks = blind_mode_service::build_document($instance, $context);
+        $blocks = transcript_service::build_document($instance, $context);
 
         $this->assertCount(1, $blocks);
         $this->assertSame('interaction', $blocks[0]['kind']);
@@ -153,7 +153,7 @@ final class blind_mode_service_test extends \advanced_testcase {
             'timemodified' => time(),
         ]);
 
-        $blocks = blind_mode_service::build_document($instance, $context);
+        $blocks = transcript_service::build_document($instance, $context);
 
         $this->assertCount(1, $blocks);
         $this->assertNotNull($blocks[0]['question']);

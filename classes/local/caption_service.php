@@ -214,7 +214,7 @@ final class caption_service {
      * {start, end, text} — mirroring the client-side parser in amd/src/player.js, since this
      * only ever reads back what this class itself wrote or passed through, never an arbitrary
      * third-party file. Shared by {@see extract_plain_text()} and by
-     * {@see \mod_playervideo\local\blind_mode_service}, which needs real cue boundaries (not
+     * {@see \mod_playervideo\local\transcript_service}, which needs real cue boundaries (not
      * just concatenated text) to interleave captions with interactions by timestamp.
      *
      * @param string $vtt A VTT document.

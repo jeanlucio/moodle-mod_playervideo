@@ -50,7 +50,6 @@ $string['attemptsheader'] = 'Tentativas e reprodução';
 $string['attemptsummaryheader'] = 'Resumo da tentativa';
 $string['backtoactivity'] = 'Voltar para a atividade';
 $string['batchcount'] = 'Número de perguntas';
-$string['blindmode'] = 'Modo texto-only';
 $string['cannotattempt'] = 'Você não tem permissão para realizar esta atividade.';
 $string['captioncontent'] = 'Conteúdo da legenda';
 $string['captiondeleted'] = 'Legenda excluída.';

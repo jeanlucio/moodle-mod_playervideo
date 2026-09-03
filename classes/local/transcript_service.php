@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Builds the linear text-only document for the "blind mode" alternate route.
+ * Builds the linear text-only document for the transcript alternate route.
  *
  * @package    mod_playervideo
  * @copyright  2026 Jean Lúcio
@@ -33,7 +33,7 @@ use context;
  * an adaptation of the video screen: no player, no timeline, no anti-skip, since there is no
  * video position to protect here — the student already has the full document in front of them.
  */
-final class blind_mode_service {
+final class transcript_service {
     /**
      * Builds the ordered list of blocks for one instance.
      *

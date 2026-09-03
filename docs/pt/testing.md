@@ -43,7 +43,7 @@ validação ao vivo de ponta a ponta contra provedores de IA reais (Gemini/Groq/
 | `question_service_test.php` | 15 |
 | `caption_service_test.php` | 7 |
 | `di_summary_service_test.php` | 3 |
-| `blind_mode_service_test.php` | 3 |
+| `transcript_service_test.php` | 3 |
 | `ai_service_test.php` | 2 |
 | **Subtotal** | **46** |
 
@@ -91,7 +91,7 @@ vendor/bin/phpunit --bootstrap lib/phpunit/bootstrap.php mod/playervideo
 | `privacy\provider` | 94% |
 | `external\submit_answer` | 85% |
 | `external\start_attempt` | 80% |
-| `local\blind_mode_service` | 78% |
+| `local\transcript_service` | 78% |
 | `completion\custom_completion` | 77% |
 | `local\caption_service` | 67% |
 | `external\generate_di_summary` | 62% |

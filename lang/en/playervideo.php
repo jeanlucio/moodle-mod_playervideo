@@ -50,7 +50,6 @@ $string['attemptsheader'] = 'Attempts & playback';
 $string['attemptsummaryheader'] = 'Attempt summary';
 $string['backtoactivity'] = 'Back to the activity';
 $string['batchcount'] = 'Number of questions';
-$string['blindmode'] = 'Text-only mode';
 $string['cannotattempt'] = 'You don\'t have permission to attempt this activity.';
 $string['captioncontent'] = 'Caption content';
 $string['captiondeleted'] = 'Caption deleted.';

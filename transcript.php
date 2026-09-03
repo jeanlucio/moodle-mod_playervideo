@@ -26,7 +26,7 @@
 
 require(__DIR__ . '/../../config.php');
 
-use mod_playervideo\local\blind_mode_service;
+use mod_playervideo\local\transcript_service;
 
 $id = required_param('id', PARAM_INT);
 $cm = get_coursemodule_from_id('playervideo', $id, 0, false, MUST_EXIST);
@@ -43,7 +43,7 @@ $PAGE->set_heading($course->fullname);
 $PAGE->set_pagelayout('incourse');
 $PAGE->requires->css('/mod/playervideo/styles.css');
 
-$blocks = blind_mode_service::build_document($instance, $context);
+$blocks = transcript_service::build_document($instance, $context);
 
 $transcriptdata = [
     'playervideoid' => (int) $instance->id,
@@ -56,10 +56,10 @@ echo html_writer::tag(
     json_encode($transcriptdata, JSON_HEX_TAG | JSON_HEX_AMP),
     ['type' => 'application/json', 'id' => 'playervideo-transcript-data']
 );
-echo $OUTPUT->render_from_template('mod_playervideo/blind_mode', [
+echo $OUTPUT->render_from_template('mod_playervideo/transcript', [
     'backtovideourl' => (new moodle_url('/mod/playervideo/view.php', ['id' => $cm->id]))->out(false),
 ]);
 
-$PAGE->requires->js_call_amd('mod_playervideo/blind_mode', 'init', []);
+$PAGE->requires->js_call_amd('mod_playervideo/transcript', 'init', []);
 
 echo $OUTPUT->footer();
