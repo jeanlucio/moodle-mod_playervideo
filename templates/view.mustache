@@ -78,6 +78,7 @@
         <div class="playervideo-stage mb-3">
             <div class="playervideo-video-wrapper">
                 <div id="playervideo-target" class="ph-video-embed"></div>
+                <div id="playervideo-caption-overlay" class="playervideo-caption-overlay" hidden></div>
             </div>
             <div class="playervideo-timeline-wrap">
                 <div class="playervideo-timeline-spacer" aria-hidden="true"></div>
@@ -94,6 +95,14 @@
                     <div class="playervideo-timeline-track"></div>
                     <div class="playervideo-playhead" id="playervideo-playhead"></div>
                     <div id="playervideo-markers"></div>
+                </div>
+                <div class="playervideo-caption-controls">
+                    <label class="visually-hidden" for="playervideo-caption-select">
+                        {{#str}}subtitles, mod_playervideo{{/str}}
+                    </label>
+                    <select class="form-select form-select-sm" id="playervideo-caption-select">
+                        <option value="">{{#str}}subtitlesoff, mod_playervideo{{/str}}</option>
+                    </select>
                 </div>
             </div>
         </div>

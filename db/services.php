@@ -129,4 +129,20 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/playervideo:manage,moodle/question:add',
     ],
+    'mod_playervideo_get_captions' => [
+        'classname' => 'mod_playervideo\external\get_captions',
+        'methodname' => 'execute',
+        'description' => 'Lists the manually authored captions of a PlayerVideo instance.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'mod/playervideo:view',
+    ],
+    'mod_playervideo_save_caption' => [
+        'classname' => 'mod_playervideo\external\save_caption',
+        'methodname' => 'execute',
+        'description' => 'Creates, updates or deletes one language\'s manually authored caption.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/playervideo:manage',
+    ],
 ];

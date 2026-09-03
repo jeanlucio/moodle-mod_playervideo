@@ -16,7 +16,8 @@
 /**
  * Vimeo Player.js adapter, exposing the same interface as player_youtube/player_html5 so
  * amd/src/player.js can drive any of the three sources uniformly: ready(), play(), pause(),
- * seek(seconds), getCurrentTime(), getDuration(), onTimeUpdate(callback), onEnded(callback).
+ * seek(seconds), getCurrentTime(), getDuration(), onTimeUpdate(callback), onEnded(callback),
+ * getCaptionTracks(), setCaptionTrack(code).
  *
  * Unlike the YouTube adapter, Player.js exposes a native 'timeupdate' event, so no polling
  * is needed here.
@@ -79,5 +80,17 @@ export const createPlayer = async(targetId, embedUrl) => {
         getDuration: () => vimeoplayer.getDuration(),
         onTimeUpdate: (callback) => vimeoplayer.on('timeupdate', (data) => callback(data.seconds)),
         onEnded: (callback) => vimeoplayer.on('ended', () => callback()),
+        // Native captions are a paid Vimeo feature (Pro/Business, videos uploaded after 05/2022,
+        // see the plugin SCOPE) — getTextTracks() legitimately resolves empty for most videos.
+        getCaptionTracks: () => vimeoplayer.getTextTracks().then(
+            (tracks) => tracks.map((track) => ({code: track.language, label: track.label || track.language}))
+        ).catch(() => []),
+        setCaptionTrack: (code) => {
+            if (code) {
+                vimeoplayer.enableTextTrack(code).catch(() => { /* No matching track — ignore. */ });
+            } else {
+                vimeoplayer.disableTextTrack().catch(() => { /* Nothing to disable — ignore. */ });
+            }
+        },
     };
 };

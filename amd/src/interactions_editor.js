@@ -480,6 +480,11 @@ const openBatchGenerateModal = async() => {
         getString('generate', 'mod_playervideo'),
     ]);
 
+    const [usetranscriptlabel, langlabel] = await Promise.all([
+        getString('usetranscriptascaption', 'mod_playervideo'),
+        getString('captionlanguage', 'mod_playervideo'),
+    ]);
+
     const body = `
         <label class="playervideo-field-label" for="playervideo-batch-transcript">
             ${escapeHtml(transcriptlabel)}
@@ -497,6 +502,18 @@ const openBatchGenerateModal = async() => {
             ${escapeHtml(generatelabel)}
         </button>
         <div id="playervideo-batch-results" class="mt-3"></div>
+        <hr>
+        <div class="d-flex align-items-end gap-2">
+            <div class="flex-grow-1">
+                <label class="playervideo-field-label" for="playervideo-batch-caption-lang">
+                    ${escapeHtml(langlabel)}
+                </label>
+                <input type="text" class="form-control" id="playervideo-batch-caption-lang" placeholder="en, pt-br...">
+            </div>
+            <button type="button" class="btn btn-outline-secondary" id="playervideo-batch-use-as-caption-btn">
+                ${escapeHtml(usetranscriptlabel)}
+            </button>
+        </div>
     `;
 
     const modal = await Modal.create({title, body, large: true, removeOnClose: true, show: true});
@@ -519,6 +536,191 @@ const openBatchGenerateModal = async() => {
             button.disabled = false;
         }
     });
+
+    root.querySelector('#playervideo-batch-use-as-caption-btn').addEventListener('click', async(event) => {
+        const button = event.target;
+        const transcript = root.querySelector('#playervideo-batch-transcript').value;
+        const lang = root.querySelector('#playervideo-batch-caption-lang').value.trim().toLowerCase();
+        if (transcript.trim() === '') {
+            Notification.alert('', await getString('error_transcriptrequired', 'mod_playervideo'));
+            return;
+        }
+        if (lang === '') {
+            Notification.alert('', await getString('error_invalidlang', 'mod_playervideo'));
+            return;
+        }
+        button.disabled = true;
+        try {
+            await saveCaptionWithOverwriteConfirm(editorData.playervideoid, lang, transcript);
+            Notification.addNotification({
+                message: await getString('captionsaved', 'mod_playervideo'),
+                type: 'success',
+            });
+        } catch (error) {
+            showError(error);
+        } finally {
+            button.disabled = false;
+        }
+    });
+};
+
+/**
+ * Saves a caption, first checking whether a manual caption already exists for that language and
+ * confirming with the teacher before overwriting it — the plugin never overwrites a caption in
+ * silence (see the plugin SCOPE, "Sinergia com legenda").
+ *
+ * @param {number} playervideoid PlayerVideo instance id.
+ * @param {string} lang Language code, already trimmed/lowercased.
+ * @param {string} content Caption content to save.
+ * @returns {Promise<void>} Resolves once saved, or once the teacher declines to overwrite.
+ */
+const saveCaptionWithOverwriteConfirm = async(playervideoid, lang, content) => {
+    const existing = await call('mod_playervideo_get_captions', {playervideoid});
+    const alreadyexists = existing.captions.some((caption) => caption.lang === lang);
+
+    if (alreadyexists) {
+        const [title, body, savestr] = await Promise.all([
+            getString('confirm', 'moodle'),
+            getString('confirmoverwritecaption', 'mod_playervideo', lang),
+            getString('save', 'moodle'),
+        ]);
+        const confirmed = await new Promise((resolve) => {
+            ModalSaveCancel.create({title, body, removeOnClose: true}).then((modal) => {
+                modal.setSaveButtonText(savestr);
+                modal.getRoot().on(ModalEvents.save, () => resolve(true));
+                modal.getRoot().on(ModalEvents.cancel, () => resolve(false));
+                modal.show();
+                return null;
+            }).catch(showError);
+        });
+        if (!confirmed) {
+            return;
+        }
+    }
+
+    await call('mod_playervideo_save_caption', {playervideoid, lang, content});
+};
+
+/**
+ * Opens the caption editor modal: pick an existing language (or add a new one), paste/edit its
+ * content, save or delete it. One save path (mod_playervideo_save_caption) shared with the
+ * "use transcript as caption too" synergy in the batch generation modal above.
+ *
+ * @returns {Promise<void>}
+ */
+const openCaptionsModal = async() => {
+    const [
+        title, langlabel, addlanguagelabel, newlanguagelabel, contentlabel, contenthint, savestr, deletestr,
+    ] = await Promise.all([
+        getString('captioneditor', 'mod_playervideo'),
+        getString('captionlanguage', 'mod_playervideo'),
+        getString('addcaptionlanguage', 'mod_playervideo'),
+        getString('newlanguagecode', 'mod_playervideo'),
+        getString('captioncontent', 'mod_playervideo'),
+        getString('pastecaptioncontenthint', 'mod_playervideo'),
+        getString('save', 'moodle'),
+        getString('delete', 'moodle'),
+    ]);
+
+    const body = `
+        <label class="playervideo-field-label" for="playervideo-caption-lang-select">${escapeHtml(langlabel)}</label>
+        <select class="form-select mb-2" id="playervideo-caption-lang-select">
+            <option value="__new__">${escapeHtml(addlanguagelabel)}</option>
+        </select>
+        <input type="text" class="form-control mb-2" id="playervideo-caption-new-lang"
+            placeholder="${escapeHtml(newlanguagelabel)}">
+        <label class="playervideo-field-label" for="playervideo-caption-content">${escapeHtml(contentlabel)}</label>
+        <div class="form-text mb-1">${escapeHtml(contenthint)}</div>
+        <textarea class="form-control mb-2" id="playervideo-caption-content" rows="10"></textarea>
+        <button type="button" class="btn btn-primary" id="playervideo-caption-save-btn">${escapeHtml(savestr)}</button>
+        <button type="button" class="btn btn-outline-danger" id="playervideo-caption-delete-btn" hidden>
+            ${escapeHtml(deletestr)}
+        </button>
+    `;
+
+    const modal = await Modal.create({title, body, large: true, removeOnClose: true, show: true});
+    const root = modal.getRoot()[0];
+    const select = root.querySelector('#playervideo-caption-lang-select');
+    const newlanginput = root.querySelector('#playervideo-caption-new-lang');
+    const contenttextarea = root.querySelector('#playervideo-caption-content');
+    const deletebutton = root.querySelector('#playervideo-caption-delete-btn');
+
+    let captions = [];
+
+    const applySelection = () => {
+        const isnew = select.value === '__new__';
+        newlanginput.hidden = !isnew;
+        deletebutton.hidden = isnew;
+        if (!isnew) {
+            const caption = captions.find((item) => item.lang === select.value);
+            contenttextarea.value = caption ? caption.content : '';
+        } else {
+            contenttextarea.value = '';
+        }
+    };
+
+    const reload = async(selectlang) => {
+        const result = await call('mod_playervideo_get_captions', {playervideoid: editorData.playervideoid});
+        captions = result.captions;
+        select.innerHTML = `<option value="__new__">${escapeHtml(addlanguagelabel)}</option>` + captions.map(
+            (caption) => `<option value="${escapeHtml(caption.lang)}">${escapeHtml(caption.lang)}</option>`
+        ).join('');
+        select.value = selectlang && captions.some((item) => item.lang === selectlang) ? selectlang : '__new__';
+        applySelection();
+    };
+
+    select.addEventListener('change', applySelection);
+
+    root.querySelector('#playervideo-caption-save-btn').addEventListener('click', async(event) => {
+        const button = event.target;
+        const lang = select.value === '__new__' ? newlanginput.value.trim().toLowerCase() : select.value;
+        button.disabled = true;
+        try {
+            await call('mod_playervideo_save_caption', {
+                playervideoid: editorData.playervideoid,
+                lang,
+                content: contenttextarea.value,
+            });
+            await reload(lang);
+            Notification.addNotification({
+                message: await getString('captionsaved', 'mod_playervideo'),
+                type: 'success',
+            });
+        } catch (error) {
+            showError(error);
+        } finally {
+            button.disabled = false;
+        }
+    });
+
+    deletebutton.addEventListener('click', async() => {
+        const lang = select.value;
+        const [confirmtitle, confirmbody] = await Promise.all([
+            getString('confirm', 'moodle'),
+            getString('confirmdeletecaption', 'mod_playervideo', lang),
+        ]);
+        const confirmmodal = await ModalSaveCancel.create({title: confirmtitle, body: confirmbody, removeOnClose: true});
+        confirmmodal.setSaveButtonText(deletestr);
+        confirmmodal.getRoot().on(ModalEvents.save, async() => {
+            try {
+                await call('mod_playervideo_save_caption', {
+                    playervideoid: editorData.playervideoid,
+                    lang,
+                    'delete': true,
+                });
+                await reload();
+                Notification.addNotification({
+                    message: await getString('captiondeleted', 'mod_playervideo'),
+                    type: 'success',
+                });
+            } catch (error) {
+                showError(error);
+            }
+        });
+        confirmmodal.show();
+    });
+
+    await reload();
 };
 
 /**
@@ -1142,6 +1344,7 @@ const initTimelineClick = () => {
     });
 
     document.getElementById('playervideo-generate-batch-btn').addEventListener('click', openBatchGenerateModal);
+    document.getElementById('playervideo-manage-captions-btn').addEventListener('click', openCaptionsModal);
 
     document.getElementById('playervideo-playpause-btn').addEventListener('click', togglePlayPause);
 };

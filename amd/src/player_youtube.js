@@ -16,7 +16,8 @@
 /**
  * YouTube IFrame API adapter, exposing the same interface as player_vimeo/player_html5 so
  * amd/src/player.js can drive any of the three sources uniformly: ready(), play(), pause(),
- * seek(seconds), getCurrentTime(), getDuration(), onTimeUpdate(callback), onEnded(callback).
+ * seek(seconds), getCurrentTime(), getDuration(), onTimeUpdate(callback), onEnded(callback),
+ * getCaptionTracks(), setCaptionTrack(code).
  *
  * The IFrame API has no native timeupdate event, so onTimeUpdate is backed by a short poll
  * started once the player fires its own onReady — the same technique mod_interactivevideo
@@ -33,6 +34,9 @@
 
 /** @var {number} How often, in ms, to poll getCurrentTime() for the onTimeUpdate callbacks. */
 const POLL_INTERVAL_MS = 500;
+
+/** @var {number} Delay, in ms, before reading the captions tracklist back after loading it. */
+const CAPTION_TRACKLIST_DELAY_MS = 400;
 
 /** @var {Promise|null} Cached IFrame API load promise, shared across every player instance. */
 let apiPromise = null;
@@ -165,6 +169,22 @@ export const createPlayer = async(targetId, embedUrl) => {
         getDuration: () => Promise.resolve(ytplayer.getDuration()),
         onTimeUpdate: (callback) => timeUpdateCallbacks.push(callback),
         onEnded: (callback) => endedCallbacks.push(callback),
+        /*
+         * The captions module's own track list is only populated a short while after it loads —
+         * there is no dedicated "ready" event for it, unlike onReady for the player itself — so
+         * this waits one poll tick before reading it back. An empty result is a legitimate
+         * answer (the video genuinely has no native captions), not a sign to wait longer.
+         */
+        getCaptionTracks: () => new Promise((resolve) => {
+            ytplayer.loadModule('captions');
+            window.setTimeout(() => {
+                const tracklist = ytplayer.getOption('captions', 'tracklist') || [];
+                resolve(tracklist.map((code) => ({code, label: code})));
+            }, CAPTION_TRACKLIST_DELAY_MS);
+        }),
+        setCaptionTrack: (code) => {
+            ytplayer.setOption('captions', 'track', code ? {languageCode: code} : {});
+        },
         destroy: () => window.clearInterval(pollTimer),
     };
 };

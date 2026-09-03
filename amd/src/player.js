@@ -74,6 +74,15 @@ let isPlaying = false;
 let seekUnrestricted = false;
 
 /**
+ * @var {Array} Manually authored captions for this instance, parsed once when the player loads
+ * — each entry shaped {lang, cues: [{start, end, text}, ...]}.
+ */
+let manualCaptions = [];
+
+/** @var {object|null} The manual caption currently selected, or null when off/native is active. */
+let activeManualCaption = null;
+
+/**
  * Announces a short status change to screen-reader users via the polite aria-live region,
  * without stealing visual focus (see the plugin SCOPE, a11y requirements).
  *
@@ -208,6 +217,129 @@ const togglePlayPause = async() => {
 };
 
 /**
+ * Parses a VTT document into a flat list of cues — deliberately minimal (cue identifiers and
+ * styling are ignored; a cue is exactly {start, end, text}), since this only ever reads back
+ * what caption_service.php itself wrote or passed through, never an arbitrary third-party file.
+ *
+ * @param {string} content A VTT document.
+ * @returns {Array} Cues, in file order.
+ */
+const parseVtt = (content) => {
+    const timeline = /(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[.,](\d{3})/;
+    const toSeconds = (h, m, s, ms) => (Number(h) * 3600) + (Number(m) * 60) + Number(s) + (Number(ms) / 1000);
+
+    const cues = [];
+    content.replace(/\r/g, '').split(/\n\n+/).forEach((block) => {
+        const lines = block.split('\n').filter((line) => line.trim() !== '');
+        const timelineindex = lines.findIndex((line) => timeline.test(line));
+        if (timelineindex === -1) {
+            return;
+        }
+        const match = lines[timelineindex].match(timeline);
+        const text = lines.slice(timelineindex + 1).join(' ').trim();
+        if (text === '') {
+            return;
+        }
+        cues.push({
+            start: toSeconds(match[1], match[2], match[3], match[4]),
+            end: toSeconds(match[5], match[6], match[7], match[8]),
+            text,
+        });
+    });
+    return cues;
+};
+
+/**
+ * Shows the caption text active at the given time, for whichever manual caption is currently
+ * selected — a no-op while a native track is active (the provider renders that one itself) or
+ * while captions are off.
+ *
+ * @param {number} time Current playback position, in seconds.
+ */
+const updateCaptionOverlay = (time) => {
+    const overlay = document.getElementById('playervideo-caption-overlay');
+    if (!overlay) {
+        return;
+    }
+    const cue = activeManualCaption
+        ? activeManualCaption.cues.find((item) => time >= item.start && time <= item.end)
+        : null;
+    overlay.textContent = cue ? cue.text : '';
+    overlay.hidden = !cue;
+};
+
+/**
+ * Applies a caption selector choice: "" (off), "native:<code>" (a track the source adapter
+ * itself renders) or "manual:<lang>" (rendered by this module's own overlay, via
+ * updateCaptionOverlay). Only one of the two rendering paths is ever active at a time.
+ *
+ * @param {string} value The selected <option> value.
+ */
+const setCaptionSelection = (value) => {
+    if (adapter.setCaptionTrack) {
+        adapter.setCaptionTrack(null);
+    }
+    activeManualCaption = null;
+    document.getElementById('playervideo-caption-overlay').hidden = true;
+
+    if (value.startsWith('native:') && adapter.setCaptionTrack) {
+        adapter.setCaptionTrack(value.slice('native:'.length));
+    } else if (value.startsWith('manual:')) {
+        const lang = value.slice('manual:'.length);
+        activeManualCaption = manualCaptions.find((caption) => caption.lang === lang) ?? null;
+    }
+};
+
+/**
+ * Populates the caption selector with the merge of native tracks (read live from the source
+ * adapter) and manually authored ones (mod_playervideo_get_captions) — never combined into one
+ * stored list, each read from where it already lives (see the plugin SCOPE, "Editor manual de
+ * legenda"). A source with no captions at all (e.g. HTML5) still gets the "off" option alone.
+ *
+ * @returns {Promise<void>}
+ */
+const loadCaptionOptions = async() => {
+    const select = document.getElementById('playervideo-caption-select');
+    if (!select) {
+        return;
+    }
+
+    const [captionresult, nativetracks] = await Promise.all([
+        call('mod_playervideo_get_captions', {playervideoid: playerData.playervideoid}).catch(() => ({captions: []})),
+        adapter.getCaptionTracks ? adapter.getCaptionTracks().catch(() => []) : Promise.resolve([]),
+    ]);
+
+    manualCaptions = captionresult.captions.map((caption) => ({
+        lang: caption.lang,
+        cues: parseVtt(caption.content),
+    }));
+
+    const offlabel = await getString('subtitlesoff', 'mod_playervideo');
+    const nativeoptions = nativetracks.map(
+        (track) => `<option value="native:${escapeHtmlAttribute(track.code)}">${escapeHtmlAttribute(track.label)}</option>`
+    );
+    const manualoptions = manualCaptions.map(
+        (caption) => `<option value="manual:${escapeHtmlAttribute(caption.lang)}">${escapeHtmlAttribute(caption.lang)}</option>`
+    );
+    select.innerHTML = [`<option value="">${offlabel}</option>`, ...nativeoptions, ...manualoptions].join('');
+    select.value = '';
+
+    select.addEventListener('change', () => setCaptionSelection(select.value));
+};
+
+/**
+ * Escapes a string for safe insertion as an HTML attribute value.
+ *
+ * @param {string} text Raw text.
+ * @returns {string}
+ */
+const escapeHtmlAttribute = (text) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+};
+
+/**
  * Wires the timeline bar's click-to-seek and the play/pause button. Shared by the live attempt
  * (gated by the anti-skip tracker) and review mode (unrestricted — the attempt is already over).
  *
@@ -218,11 +350,13 @@ const initTimelineControls = async() => {
     document.getElementById('playervideo-ruler-end').textContent = formatTime(duration);
     renderMarkers();
     await setPlayingState(false);
+    await loadCaptionOptions();
 
     adapter.onTimeUpdate((time) => {
         document.getElementById('playervideo-playhead').style.left = `${percentForTime(time)}%`;
         document.getElementById('playervideo-ruler-start').textContent = formatTime(time);
     });
+    adapter.onTimeUpdate(updateCaptionOverlay);
 
     document.getElementById('playervideo-timeline').addEventListener('click', async(event) => {
         const target = timestampForClientX(event.clientX);

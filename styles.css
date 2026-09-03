@@ -98,10 +98,46 @@ video.ph-video-embed {
     padding: 1rem;
 }
 
+.path-mod-playervideo .playervideo-video-wrapper {
+    position: relative;
+}
+
 .path-mod-playervideo .playervideo-video-wrapper #playervideo-target {
     border-radius: 0.5rem;
     overflow: hidden;
     background: var(--pv-ink-soft, #262b35);
+}
+
+/*
+ * Custom subtitle renderer for a manually authored caption (see player.js updateCaptionOverlay)
+ * — the only rendering path available for a manual caption, since neither the YouTube nor the
+ * Vimeo embed API accepts an arbitrary custom track for burn-in. A native track, by contrast,
+ * is drawn by the provider's own overlay inside the iframe and never touches this element.
+ */
+.path-mod-playervideo .playervideo-caption-overlay {
+    position: absolute;
+    left: 50%;
+    bottom: 0.75rem;
+    transform: translateX(-50%);
+    max-width: 85%;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    background: rgb(0 0 0 / 75%);
+    color: #fff;
+    font-size: 0.95rem;
+    text-align: center;
+    pointer-events: none;
+}
+
+.path-mod-playervideo .playervideo-caption-controls {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+}
+
+.path-mod-playervideo .playervideo-caption-controls select {
+    max-width: 12rem;
 }
 
 .path-mod-playervideo .playervideo-timeline-wrap {

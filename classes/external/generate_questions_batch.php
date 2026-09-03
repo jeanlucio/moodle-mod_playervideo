@@ -31,6 +31,7 @@ use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
 use mod_playervideo\local\ai_service;
+use mod_playervideo\local\caption_service;
 use mod_playervideo\local\question_service;
 use moodle_exception;
 
@@ -171,8 +172,10 @@ class generate_questions_batch extends external_api {
      *
      * Deliberately permissive about the transcript's own format — "any reasonable format" per
      * the project spec, not a fixed grammar like VTT. Recognises mm:ss, h:mm:ss and a bare
-     * "12.5s"/"12s" style, anywhere in a line, since real transcript exports vary. This is the
-     * ground truth every AI-returned timestamp is checked against.
+     * "12.5s"/"12s" style, anywhere in a line, since real transcript exports vary — the same
+     * per-line parsing {@see caption_service::parse_line_timestamp()} uses to build a caption
+     * track from pasted text, kept in one place so both features recognise the same formats.
+     * This is the ground truth every AI-returned timestamp is checked against.
      *
      * @param string $transcript The pasted transcript text.
      * @return int[] Every distinct timestamp found, in seconds.
@@ -181,15 +184,9 @@ class generate_questions_batch extends external_api {
         $timestamps = [];
 
         foreach (explode("\n", $transcript) as $line) {
-            if (preg_match('/(?:(\d+):)?(\d{1,2}):(\d{2})/', $line, $matches)) {
-                $hours = $matches[1] !== '' ? (int) $matches[1] : 0;
-                $minutes = (int) $matches[2];
-                $seconds = (int) $matches[3];
-                $timestamps[] = $hours * 3600 + $minutes * 60 + $seconds;
-                continue;
-            }
-            if (preg_match('/\b(\d+)\s*s\b/i', $line, $matches)) {
-                $timestamps[] = (int) $matches[1];
+            $timestamp = caption_service::parse_line_timestamp($line);
+            if ($timestamp !== null) {
+                $timestamps[] = $timestamp;
             }
         }
 
