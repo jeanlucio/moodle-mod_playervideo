@@ -36,7 +36,7 @@
 * 📄 **Resumo em Leitura Fácil por IA, Sempre Revisado Antes:** Um resumo em linguagem simples
   do conteúdo do vídeo, gerado por IA — sempre pendente até um professor aprovar ou editar,
   exatamente como uma pergunta gerada; o estudante só vê a versão aprovada.
-* 🦻 **Modo Texto-Only ("Cego"):** A mesma tentativa — mesma nota, mesmo progresso —
+* 🦻 **Modo Texto-Only:** A mesma tentativa — mesma nota, mesmo progresso —
   renderizada como um único documento linear mesclando legendas e interações na ordem certa,
   pra um estudante que não pode ou não quer usar o player de vídeo. Sempre disponível na tela
   inicial da atividade, não escondido atrás de uma configuração de acessibilidade.

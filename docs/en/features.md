@@ -35,7 +35,7 @@
 * 📄 **AI Easy-Read Summary, Always Reviewed First:** An AI-generated plain-language summary of
   the video's content — always pending until a teacher approves or edits it, exactly like a
   generated question; students only ever see the approved version.
-* 🦻 **Text-Only ("Blind") Mode:** The same attempt — same grade, same progress — rendered as a
+* 🦻 **Text-Only Mode:** The same attempt — same grade, same progress — rendered as a
   single linear document merging captions and interactions in order, for a student who cannot
   or does not want to use the video player. Always available from the activity's start screen,
   not hidden behind an accessibility setting.
