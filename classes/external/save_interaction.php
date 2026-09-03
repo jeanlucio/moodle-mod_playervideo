@@ -30,6 +30,7 @@ use core_external\external_function_parameters;
 use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
+use mod_playervideo\local\question_service;
 use moodle_exception;
 
 /**
@@ -157,6 +158,14 @@ class save_interaction extends external_api {
         } else {
             if ($params['questionid'] <= 0 || !$DB->record_exists('question', ['id' => $params['questionid']])) {
                 throw new moodle_exception('error_questionnotfound', 'mod_playervideo');
+            }
+            // Existence alone would accept any question id on the whole site, including
+            // one from a private category in a course this caller cannot reach — re-validate
+            // against the same moodle/question:useall|usemine category rule the "pull from bank"
+            // picker already applies to what it offers, closing that gap for a raw call to this
+            // web service.
+            if (!question_service::question_belongs_to_reusable_category($params['questionid'], $cm)) {
+                throw new moodle_exception('error_questioncategorynotallowed', 'mod_playervideo');
             }
         }
 

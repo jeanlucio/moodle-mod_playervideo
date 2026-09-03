@@ -24,19 +24,19 @@
 
 namespace mod_playervideo\external;
 
-use context;
-use context_course;
 use context_module;
 use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
+use mod_playervideo\local\question_service;
 
 /**
  * Lists existing multichoice/truefalse questions the teacher is allowed to reuse, for the
- * "puxar do banco" timeline picker — reuses the same moodle/question:useall|usemine category
- * resolution already used by mod_playerpuzzle's mod_form.php.
+ * "puxar do banco" timeline picker — the category resolution itself lives in
+ * {@see question_service::get_reusable_question_context_ids()}, shared with the server-side
+ * re-validation save_interaction applies to whatever questionid is actually persisted.
  */
 class search_questions extends external_api {
     /** @var int Maximum results returned, regardless of the requested limit. */
@@ -77,24 +77,7 @@ class search_questions extends external_api {
         self::validate_context($modcontext);
         require_capability('mod/playervideo:manage', $modcontext);
 
-        $coursecontext = context_course::instance($cm->course);
-        $contextstocheck = [];
-        foreach ($coursecontext->get_parent_contexts(true) as $ctx) {
-            $contextstocheck[$ctx->id] = $ctx;
-        }
-        $modinfo = get_fast_modinfo($cm->course);
-        foreach ($modinfo->cms as $othercm) {
-            $othercontext = context_module::instance($othercm->id);
-            $contextstocheck[$othercontext->id] = $othercontext;
-        }
-
-        $validcontextids = [];
-        foreach ($contextstocheck as $ctx) {
-            if (has_capability('moodle/question:useall', $ctx) || has_capability('moodle/question:usemine', $ctx)) {
-                $validcontextids[] = $ctx->id;
-            }
-        }
-
+        $validcontextids = question_service::get_reusable_question_context_ids($cm);
         if (empty($validcontextids)) {
             return ['questions' => []];
         }

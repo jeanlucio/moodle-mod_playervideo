@@ -125,6 +125,58 @@ final class save_interaction_test extends \advanced_testcase {
     }
 
     /**
+     * Tests that a question in a category the teacher has no access to (a private category in
+     * another course) is rejected, even though the id itself exists in the database — the
+     * server-side re-validation of the same moodle/question:useall|usemine rule the "pull from
+     * bank" picker already applies to what it offers.
+     *
+     * @return void
+     */
+    public function test_question_requires_a_reusable_category(): void {
+        $instance = $this->make_instance();
+
+        $othercourse = $this->getDataGenerator()->create_course();
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $othercontext = \context_course::instance($othercourse->id);
+        $othercategory = $questiongenerator->create_question_category(['contextid' => $othercontext->id]);
+        $question = $questiongenerator->create_question('multichoice', 'one_of_four', ['category' => $othercategory->id]);
+
+        $result = $this->call([
+            'playervideoid' => $instance->id,
+            'timestamp' => 5,
+            'type' => 'question',
+            'questionid' => $question->id,
+        ]);
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_questioncategorynotallowed', $result['exception']->errorcode);
+    }
+
+    /**
+     * Tests that a question in the course's own category — the legitimate "pull from bank" case
+     * — is still accepted, so the re-validation above does not regress the normal flow.
+     *
+     * @return void
+     */
+    public function test_question_in_course_category_is_accepted(): void {
+        $instance = $this->make_instance();
+
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $coursecontext = \context_course::instance($this->course->id);
+        $category = $questiongenerator->create_question_category(['contextid' => $coursecontext->id]);
+        $question = $questiongenerator->create_question('multichoice', 'one_of_four', ['category' => $category->id]);
+
+        $result = $this->call([
+            'playervideoid' => $instance->id,
+            'timestamp' => 5,
+            'type' => 'question',
+            'questionid' => $question->id,
+        ]);
+
+        $this->assertFalse($result['error']);
+    }
+
+    /**
      * Tests that an empty note is rejected.
      *
      * @return void

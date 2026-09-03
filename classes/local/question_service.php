@@ -26,6 +26,8 @@ namespace mod_playervideo\local;
 
 use coding_exception;
 use context;
+use context_course;
+use context_module;
 use stdClass;
 
 /**
@@ -358,6 +360,80 @@ class question_service {
         $qtype = $DB->get_field('question', 'qtype', ['id' => $questionid]);
 
         return $qtype !== false ? (string) $qtype : null;
+    }
+
+    /**
+     * Returns the ids of question categories' contexts the current user may reuse a question
+     * from, for a "pull from bank" picker scoped to the given course module: the course context,
+     * its parents, and every sibling activity's module context in the same course, filtered to
+     * those where the user actually holds moodle/question:useall or moodle/question:usemine —
+     * mirroring the category resolution already used by mod_playerpuzzle's mod_form.php.
+     *
+     * Shared by {@see \mod_playervideo\external\search_questions} (to build the picker's own
+     * results) and {@see question_belongs_to_reusable_category()} (to reject, server-side, a
+     * questionid whose category the caller cannot reach — closing the gap a raw web service call
+     * could otherwise use to bypass the picker's own filtering).
+     *
+     * @param stdClass $cm Course module record for the PlayerVideo instance.
+     * @return int[] Valid context ids, empty if the user may not reuse any question here.
+     */
+    public static function get_reusable_question_context_ids(stdClass $cm): array {
+        $coursecontext = context_course::instance($cm->course);
+        $contextstocheck = [];
+        foreach ($coursecontext->get_parent_contexts(true) as $ctx) {
+            $contextstocheck[$ctx->id] = $ctx;
+        }
+
+        $modinfo = get_fast_modinfo($cm->course);
+        foreach ($modinfo->cms as $othercm) {
+            $othercontext = context_module::instance($othercm->id);
+            $contextstocheck[$othercontext->id] = $othercontext;
+        }
+
+        $validcontextids = [];
+        foreach ($contextstocheck as $ctx) {
+            if (has_capability('moodle/question:useall', $ctx) || has_capability('moodle/question:usemine', $ctx)) {
+                $validcontextids[] = $ctx->id;
+            }
+        }
+
+        return $validcontextids;
+    }
+
+    /**
+     * Checks whether a question sits in a category the current user is allowed to reuse it from,
+     * for the given course module.
+     *
+     * Existing (record_exists('question', ...)) is not enough on its own: any question id on the
+     * whole site would pass that check, including one from a private category in a course the
+     * caller has no access to. This is the server-side re-validation of the same rule the "pull
+     * from bank" picker already applies to what it *offers* — a raw call to the web service that
+     * persists the choice must enforce it too, not just the picker that suggests it.
+     *
+     * @param int $questionid The question id to check.
+     * @param stdClass $cm Course module record for the PlayerVideo instance.
+     * @return bool True if the question exists in a category among the reusable contexts.
+     */
+    public static function question_belongs_to_reusable_category(int $questionid, stdClass $cm): bool {
+        global $DB;
+
+        $contextids = self::get_reusable_question_context_ids($cm);
+        if (empty($contextids)) {
+            return false;
+        }
+
+        [$contextinsql, $contextparams] = $DB->get_in_or_equal($contextids, SQL_PARAMS_NAMED, 'ctx');
+        $contextparams['questionid'] = $questionid;
+
+        $sql = "SELECT 1
+                  FROM {question} q
+                  JOIN {question_versions} qv ON qv.questionid = q.id AND qv.status = 'ready'
+                  JOIN {question_bank_entries} qbe ON qbe.id = qv.questionbankentryid
+                  JOIN {question_categories} qc ON qc.id = qbe.questioncategoryid
+                 WHERE q.id = :questionid
+                   AND qc.contextid $contextinsql";
+
+        return $DB->record_exists_sql($sql, $contextparams);
     }
 
     /**

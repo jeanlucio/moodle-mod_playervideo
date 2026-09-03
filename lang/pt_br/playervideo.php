@@ -119,6 +119,7 @@ $string['error_notetextrequired'] = 'Informe o texto da nota.';
 $string['error_notyourattempt'] = 'Esta tentativa não pertence a você.';
 $string['error_onlyonecorrectanswer'] = 'Apenas uma alternativa pode ser correta numa pergunta de resposta única.';
 $string['error_pollhasvotes'] = 'Esta enquete já tem votos; suas opções não podem mais ser alteradas.';
+$string['error_questioncategorynotallowed'] = 'Você não tem permissão para reutilizar esta pergunta aqui.';
 $string['error_questionnotfound'] = 'Pergunta não encontrada.';
 $string['error_questiontextrequired'] = 'Informe o texto da pergunta.';
 $string['error_responsealreadygraded'] = 'Esta resposta já foi corrigida.';

@@ -119,6 +119,7 @@ $string['error_notetextrequired'] = 'Enter the note text.';
 $string['error_notyourattempt'] = 'This attempt does not belong to you.';
 $string['error_onlyonecorrectanswer'] = 'Only one answer can be correct for a single-answer question.';
 $string['error_pollhasvotes'] = 'This poll already has votes; its options can no longer be changed.';
+$string['error_questioncategorynotallowed'] = 'You are not allowed to reuse this question here.';
 $string['error_questionnotfound'] = 'Question not found.';
 $string['error_questiontextrequired'] = 'Enter the question text.';
 $string['error_responsealreadygraded'] = 'This response has already been graded.';
