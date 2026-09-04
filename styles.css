@@ -721,6 +721,14 @@ video.ph-video-embed {
     font-size: 0.9rem;
 }
 
+.path-mod-playervideo .playervideo-poster {
+    display: block;
+    max-width: 100%;
+    max-height: 20rem;
+    margin-bottom: 1rem;
+    border-radius: 0.5rem;
+}
+
 /*
  * Not scoped under .path-mod-playervideo: core/modal hoists its markup to <body> before
  * showing it (see the Bootstrap Modals convention in CLAUDE.md), breaking ancestor scope —

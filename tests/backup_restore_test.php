@@ -427,6 +427,58 @@ final class backup_restore_test extends \advanced_testcase {
     }
 
     /**
+     * A full course backup/restore must carry the videofile and posterimage file areas along —
+     * a real, pre-existing gap for videofile specifically (present since Fase 2, only found
+     * while adding posterimage in Fase 9): neither annotate_files() on the backup side nor
+     * add_related_files() on the restore side ever mentioned it, so an uploaded HTML5 video was
+     * silently dropped by every backup and "Duplicate activity" before this fix.
+     *
+     * @return void
+     */
+    public function test_backup_restore_preserves_videofile_and_posterimage(): void {
+        global $DB;
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('playervideo', [
+            'course' => $course->id,
+            'videotype' => 'html5',
+            'posterdescription' => 'A microscope focused on a leaf cross-section.',
+        ]);
+        $cm = get_coursemodule_from_instance('playervideo', $instance->id, $course->id, false, MUST_EXIST);
+        $context = \context_module::instance($cm->id);
+
+        $fs = get_file_storage();
+        $fs->create_file_from_string([
+            'contextid' => $context->id, 'component' => 'mod_playervideo', 'filearea' => 'videofile',
+            'itemid' => 0, 'filepath' => '/', 'filename' => 'movie.mp4',
+        ], 'fake video content');
+        $fs->create_file_from_string([
+            'contextid' => $context->id, 'component' => 'mod_playervideo', 'filearea' => 'posterimage',
+            'itemid' => 0, 'filepath' => '/', 'filename' => 'cover.jpg',
+        ], 'fake image content');
+
+        $newcourse = $this->backup_and_restore_into_new_course($course);
+
+        $newinstance = $DB->get_record('playervideo', ['course' => $newcourse->id], '*', MUST_EXIST);
+        $this->assertSame(
+            'A microscope focused on a leaf cross-section.',
+            $newinstance->posterdescription
+        );
+
+        $newcm = get_coursemodule_from_instance('playervideo', $newinstance->id, $newcourse->id, false, MUST_EXIST);
+        $newcontext = \context_module::instance($newcm->id);
+
+        $newvideofile = $fs->get_file($newcontext->id, 'mod_playervideo', 'videofile', 0, '/', 'movie.mp4');
+        $this->assertNotFalse($newvideofile);
+        $this->assertSame('fake video content', $newvideofile->get_content());
+
+        $newposterfile = $fs->get_file($newcontext->id, 'mod_playervideo', 'posterimage', 0, '/', 'cover.jpg');
+        $this->assertNotFalse($newposterfile);
+        $this->assertSame('fake image content', $newposterfile->get_content());
+    }
+
+    /**
      * Backs up the given course and restores it into a brand new course, returning that
      * course. Mirrors mod_playerwords's own full-course backup/restore test pattern.
      *

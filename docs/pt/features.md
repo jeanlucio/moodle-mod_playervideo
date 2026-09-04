@@ -29,6 +29,10 @@
   abre um painel lateral listando cada trecho com seu horário; digitar filtra e realça os
   resultados em tempo real, e clicar num trecho leva o vídeo até lá — respeitando a mesma regra
   de anti-avanço da própria timeline.
+* 🖼️ **Imagem de Capa Acessível:** uma imagem de capa opcional exibida na tela inicial da
+  atividade, do mesmo jeito nas três fontes de vídeo. Uma descrição em texto é obrigatória
+  assim que uma imagem é enviada — ela vira o `alt` de verdade da imagem, nunca um detalhe
+  esquecido depois.
 * 🔁 **Múltiplas Tentativas e Agregação de Nota:** Uma atividade pode permitir um número fixo de
   tentativas ou nenhum limite, agregando a nota final pela maior, média, primeira ou última
   tentativa.

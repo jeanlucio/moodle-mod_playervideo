@@ -238,6 +238,20 @@ function playervideo_add_instance(stdClass $data, mixed $mform = null): int {
         ]);
     }
 
+    // Mirrors the videofile guard above: a caller that never submitted a real draft area at all
+    // (e.g. a test fixture built directly through the generator, never through the actual form)
+    // must not reach file_save_draft_area_files() with nothing meaningful to give it — passing
+    // an empty/absent draft itemid made Moodle try to resolve a context for the current $USER,
+    // which fails outright outside a real request (a real form submission, on the other hand,
+    // always supplies a genuine draft itemid here, even for an empty filepicker).
+    if (!empty($data->posterimage)) {
+        $context = context_module::instance($data->coursemodule);
+        file_save_draft_area_files($data->posterimage, $context->id, 'mod_playervideo', 'posterimage', 0, [
+            'subdirs' => 0,
+            'maxfiles' => 1,
+        ]);
+    }
+
     playervideo_grade_item_update($data);
 
     return $data->id;
@@ -268,6 +282,14 @@ function playervideo_update_instance(stdClass $data, mixed $mform = null): bool 
     if ($data->videotype === 'html5' && !empty($data->videofile)) {
         $context = context_module::instance($data->coursemodule);
         file_save_draft_area_files($data->videofile, $context->id, 'mod_playervideo', 'videofile', 0, [
+            'subdirs' => 0,
+            'maxfiles' => 1,
+        ]);
+    }
+
+    if (!empty($data->posterimage)) {
+        $context = context_module::instance($data->coursemodule);
+        file_save_draft_area_files($data->posterimage, $context->id, 'mod_playervideo', 'posterimage', 0, [
             'subdirs' => 0,
             'maxfiles' => 1,
         ]);
@@ -432,7 +454,7 @@ function playervideo_cm_info_dynamic(cm_info $cm): void {
 }
 
 /**
- * Serves a playervideo instance's uploaded video file.
+ * Serves a playervideo instance's uploaded video file or cover image.
  *
  * @param stdClass $course Course object.
  * @param stdClass $cm Course module object.
@@ -462,7 +484,7 @@ function playervideo_pluginfile(
         return false;
     }
 
-    if ($filearea !== 'videofile') {
+    if ($filearea !== 'videofile' && $filearea !== 'posterimage') {
         return false;
     }
 
@@ -471,7 +493,7 @@ function playervideo_pluginfile(
     $filepath = $args ? '/' . implode('/', $args) . '/' : '/';
 
     $fs = get_file_storage();
-    $file = $fs->get_file($context->id, 'mod_playervideo', 'videofile', $itemid, $filepath, $filename);
+    $file = $fs->get_file($context->id, 'mod_playervideo', $filearea, $itemid, $filepath, $filename);
     if (!$file || $file->is_directory()) {
         return false;
     }

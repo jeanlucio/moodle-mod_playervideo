@@ -69,6 +69,21 @@ if ($instance->videotype === 'html5') {
 }
 $embedurl = video_source::get_embed_url($instance->videotype, $instance->videourl, $fileurl);
 
+$posterurl = null;
+$fs = get_file_storage();
+$posterfiles = $fs->get_area_files($context->id, 'mod_playervideo', 'posterimage', 0, 'filename', false);
+$posterfile = reset($posterfiles);
+if ($posterfile) {
+    $posterurl = moodle_url::make_pluginfile_url(
+        $context->id,
+        'mod_playervideo',
+        'posterimage',
+        0,
+        $posterfile->get_filepath(),
+        $posterfile->get_filename()
+    );
+}
+
 $interactionrecords = $DB->get_records('playervideo_interactions', ['playervideoid' => $instance->id], 'timestamp ASC');
 $questionids = array_filter(array_map(
     static fn($record) => $record->type === 'question' ? (int) $record->questionid : null,
@@ -192,6 +207,12 @@ echo $OUTPUT->render_from_template('mod_playervideo/view', [
     'previousattempts' => $previousattempts,
     'hasdisummary' => $approvedsummary !== null,
     'transcripturl' => (new moodle_url('/mod/playervideo/transcript.php', ['id' => $cm->id]))->out(false),
+    'hasposter' => $posterurl !== null,
+    'posterurl' => $posterurl !== null ? $posterurl->out(false) : null,
+    // Mustache's own {{posterdescription}} (double-mustache) already escapes this for safe use
+    // as the <img alt="..."> attribute value below — never pre-escape here too, or quotes end
+    // up double-encoded.
+    'posterdescription' => $instance->posterdescription ?? '',
 ]);
 
 $PAGE->requires->js_call_amd('mod_playervideo/onboarding', 'init', [$shouldautoshowintro]);

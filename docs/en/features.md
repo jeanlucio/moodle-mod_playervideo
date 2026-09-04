@@ -29,6 +29,9 @@
   side panel listing every line with its timestamp; typing filters and highlights matches in
   real time, and clicking a line jumps the video there — respecting the exact same anti-skip
   rule as the timeline itself.
+* 🖼️ **Accessible Cover Image:** An optional poster image shown on the activity's start screen,
+  the same way for all three video sources. A text description is required the moment an image
+  is uploaded — it becomes the image's real `alt` text, never an afterthought.
 * 🔁 **Multiple Attempts & Grade Aggregation:** An activity can allow a fixed number of attempts
   or none at all, aggregating the final grade by highest, average, first or last attempt.
 * ⏳ **Grade Withheld Until Every Open Question Is Graded:** An attempt with a pending essay

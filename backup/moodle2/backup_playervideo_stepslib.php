@@ -43,6 +43,7 @@ class backup_playervideo_activity_structure_step extends backup_activity_structu
             'videourl',
             'trimstart',
             'trimend',
+            'posterdescription',
             'showinline',
             'grademethod',
             'grade',
@@ -181,8 +182,14 @@ class backup_playervideo_activity_structure_step extends backup_activity_structu
             $response->set_source_table('playervideo_responses', ['attemptid' => backup::VAR_PARENTID]);
         }
 
-        // Annotate files embedded in the intro editor field, if any.
+        // Annotate every file area this activity owns, so the actual files travel with the
+        // backup — never just the DB rows/columns that point at them. videofile was a real,
+        // pre-existing gap here (present since Fase 2, only found while adding posterimage in
+        // Fase 9): an uploaded HTML5 video was never included in a backup or "Duplicate
+        // activity" at all.
         $playervideo->annotate_files('mod_playervideo', 'intro', null);
+        $playervideo->annotate_files('mod_playervideo', 'videofile', null);
+        $playervideo->annotate_files('mod_playervideo', 'posterimage', null);
 
         // Annotate IDs that reference other tables so they are remapped on restore.
         // 'question_created'/'question_answer' are core's own mapping namespaces, populated

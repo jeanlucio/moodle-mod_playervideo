@@ -77,6 +77,14 @@ class mod_playervideo_mod_form extends moodleform_mod {
         ]);
         $mform->hideIf('videofile', 'videotype', 'neq', 'html5');
 
+        $mform->addElement('filepicker', 'posterimage', get_string('posterimage', 'mod_playervideo'), null, [
+            'maxbytes' => $COURSE->maxbytes,
+            'accepted_types' => ['web_image'],
+        ]);
+
+        $mform->addElement('text', 'posterdescription', get_string('posterdescription', 'mod_playervideo'), ['size' => '64']);
+        $mform->setType('posterdescription', PARAM_TEXT);
+
         $mform->addElement('advcheckbox', 'showinline', get_string('fixinline', 'mod_playervideo'));
         $mform->setType('showinline', PARAM_INT);
         $mform->setDefault('showinline', 0);
@@ -207,7 +215,48 @@ class mod_playervideo_mod_form extends moodleform_mod {
             $errors['hudretrycostqty'] = get_string('error_hud_cost_qty', 'mod_playervideo');
         }
 
+        // A description is only meaningful — and only checked — when a cover image was
+        // actually uploaded; an activity with no image at all needs no description for it.
+        $posterinfo = file_get_draft_area_info((int) $data['posterimage']);
+        if ($posterinfo['filecount'] > 0 && trim($data['posterdescription']) === '') {
+            $errors['posterdescription'] = get_string('error_posterdescriptionrequired', 'mod_playervideo');
+        }
+
         return $errors;
+    }
+
+    /**
+     * Preloads the videofile/posterimage draft file areas so an already-uploaded file shows up
+     * in its filepicker when reopening the settings form to edit them.
+     *
+     * moodleform_mod's own automatic preprocessing only ever covers the intro editor and the
+     * standard grade elements — never a plugin's own custom file element. Without this
+     * override, videofile's filepicker (present since Fase 2, well before posterimage) always
+     * rendered empty on edit, and saving the form for any unrelated reason (e.g. renaming the
+     * activity) would silently wipe the previously uploaded video: file_save_draft_area_files()
+     * in lib.php would synchronise the stored file to match a fresh, empty auto-generated draft
+     * area, since nothing had ever told it the real one already existed. Found and fixed
+     * together with posterimage's own identical need for this same override.
+     *
+     * @param array $defaultvalues Reference to the array of default values.
+     * @return void
+     */
+    public function data_preprocessing(&$defaultvalues): void {
+        if (empty($this->current->id)) {
+            return;
+        }
+
+        foreach (['videofile', 'posterimage'] as $filearea) {
+            $defaultvalues[$filearea] = file_get_submitted_draft_itemid($filearea);
+            file_prepare_draft_area(
+                $defaultvalues[$filearea],
+                $this->context->id,
+                'mod_playervideo',
+                $filearea,
+                0,
+                ['subdirs' => 0, 'maxfiles' => 1]
+            );
+        }
     }
 
     /**

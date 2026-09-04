@@ -372,7 +372,10 @@ class restore_playervideo_activity_structure_step extends restore_activity_struc
     }
 
     /**
-     * Restores files embedded in the activity's intro editor field.
+     * Restores files from every file area this activity owns: the intro editor field, an
+     * uploaded HTML5 video, and a cover image. videofile was a real, pre-existing gap here
+     * (present since Fase 2, only found while adding posterimage in Fase 9) — restored now
+     * alongside it, both following annotate_files()'s matching call in the backup step.
      *
      * The grade item itself is not touched here: restore_activity_grades_structure_step (added
      * generically by restore_activity_task for every gradable module) already restores it.
@@ -381,5 +384,7 @@ class restore_playervideo_activity_structure_step extends restore_activity_struc
      */
     protected function after_execute(): void {
         $this->add_related_files('mod_playervideo', 'intro', null);
+        $this->add_related_files('mod_playervideo', 'videofile', null);
+        $this->add_related_files('mod_playervideo', 'posterimage', null);
     }
 }

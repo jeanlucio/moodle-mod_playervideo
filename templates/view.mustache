@@ -35,7 +35,10 @@
         "pendingcorrectionnotice": "",
         "previousattempts": [
             {"attemptid": 5, "attemptnumber": 1, "gradeline": "Grade: 80", "pending": false}
-        ]
+        ],
+        "hasposter": true,
+        "posterurl": "https://example.com/pluginfile.php/1/mod_playervideo/posterimage/0/cover.jpg",
+        "posterdescription": "A microscope focused on a leaf cross-section."
     }
 }}
 <div class="path-mod-playervideo">
@@ -47,6 +50,9 @@
     <div id="playervideo-onboarding-content" hidden>{{{introbody}}}</div>
 
     <div id="playervideo-start-screen">
+        {{#hasposter}}
+        <img src="{{posterurl}}" alt="{{posterdescription}}" class="playervideo-poster">
+        {{/hasposter}}
         {{^canattempt}}
         <div class="alert alert-warning">{{#str}}cannotattempt, mod_playervideo{{/str}}</div>
         {{/canattempt}}
