@@ -22,6 +22,9 @@
   `localStorage` que sobrevive a uma queda de conexão; recarregar a página retoma exatamente a
   mesma tentativa em andamento. Avançar além do que já foi de fato assistido é bloqueado no
   servidor (configurável por atividade); retroceder é sempre livre.
+* ⏩ **Controle de Velocidade de Reprodução:** de 0.5x a 2x, nas três fontes de vídeo, sem nunca
+  distorcer o registro de trechos assistidos do anti-avanço — o progresso é sempre medido em
+  tempo real de vídeo, nunca em tempo de relógio.
 * 🔁 **Múltiplas Tentativas e Agregação de Nota:** Uma atividade pode permitir um número fixo de
   tentativas ou nenhum limite, agregando a nota final pela maior, média, primeira ou última
   tentativa.

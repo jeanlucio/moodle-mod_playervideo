@@ -22,6 +22,9 @@
   dropped connection; reloading the page resumes the exact same in-progress attempt. Forward
   seeking past what has actually been watched is blocked server-side (configurable per
   activity), rewinding is always free.
+* ⏩ **Playback Speed Control:** 0.5x to 2x, on all three video sources, without ever throwing
+  off the anti-skip watched-segment tracking — progress is always measured in actual video time,
+  not wall-clock time.
 * 🔁 **Multiple Attempts & Grade Aggregation:** An activity can allow a fixed number of attempts
   or none at all, aggregating the final grade by highest, average, first or last attempt.
 * ⏳ **Grade Withheld Until Every Open Question Is Graded:** An attempt with a pending essay
