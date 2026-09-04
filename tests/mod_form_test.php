@@ -48,24 +48,106 @@ final class mod_form_test extends \advanced_testcase {
      * Instantiates mod_playervideo_mod_form for an existing instance, enough to run
      * validation() against.
      *
+     * @param array $instanceoverrides Field values to override on the generated instance.
      * @return \mod_playervideo_mod_form
      */
-    private function build_form(): \mod_playervideo_mod_form {
+    private function build_form(array $instanceoverrides = []): \mod_playervideo_mod_form {
         global $PAGE;
 
         $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
-        $instance = $generator->create_instance(['course' => $this->course->id]);
+        $instance = $generator->create_instance(array_merge(['course' => $this->course->id], $instanceoverrides));
         $cm = get_coursemodule_from_instance('playervideo', $instance->id);
 
         $PAGE->set_course($this->course);
 
-        $data = (object) [
-            'instance' => $instance->id,
-            'id' => $cm->id,
-            'course' => $this->course->id,
-        ];
+        // Cloning the real instance record (not a bare {instance, id, course} stub) matters
+        // here: get_moduleinfo_data() does the same in real Moodle before constructing the
+        // form, and add_stale_hud_item_option() reads $this->current->hudcorrectitem — a
+        // stub object without that field would always see it as unset (0), silently skipping
+        // the whole stale-option branch regardless of what the test actually configured.
+        $data = clone $instance;
+        $data->instance = $instance->id;
+        $data->id = $cm->id;
 
         return new \mod_playervideo_mod_form($data, 0, $cm, $this->course);
+    }
+
+    /**
+     * Extracts the underlying MoodleQuickForm from a mod_playervideo_mod_form instance, so a
+     * test can inspect elements/types that have no public accessor of their own.
+     *
+     * @param \mod_playervideo_mod_form $form Form instance.
+     * @return \MoodleQuickForm
+     */
+    private function get_quickform(\mod_playervideo_mod_form $form): \MoodleQuickForm {
+        $refclass = new \ReflectionClass(\mod_playervideo_mod_form::class);
+        $formprop = $refclass->getProperty('_form');
+        $formprop->setAccessible(true);
+
+        return $formprop->getValue($form);
+    }
+
+    /**
+     * Skips the current test when block_playerhud is not installed — mirrors the same soft
+     * dependency guard already used by hud_service_test.php.
+     *
+     * @return void
+     */
+    private function skip_if_no_playerhud(): void {
+        global $DB;
+        if (!$DB->get_manager()->table_exists('block_playerhud_items')) {
+            $this->markTestSkipped('block_playerhud not installed.');
+        }
+    }
+
+    /**
+     * Inserts a block_instances record for block_playerhud in the given course context —
+     * same pattern as hud_service_test.php's own make_block_instance().
+     *
+     * @param \stdClass $course Course object.
+     * @return int Block instance ID.
+     */
+    private function make_hud_block(\stdClass $course): int {
+        global $DB;
+        $context = \context_course::instance($course->id);
+
+        return $DB->insert_record('block_instances', (object) [
+            'blockname' => 'playerhud',
+            'parentcontextid' => $context->id,
+            'showinsubcontexts' => 0,
+            'pagetypepattern' => 'course-view-*',
+            'subpagepattern' => null,
+            'defaultregion' => 'side-pre',
+            'defaultweight' => 0,
+            'configdata' => base64_encode(serialize(new \stdClass())),
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+    }
+
+    /**
+     * Inserts a block_playerhud_items record for the given block instance — same pattern as
+     * hud_service_test.php's own make_item().
+     *
+     * @param int $blockinstanceid Block instance ID.
+     * @param string $name Item display name.
+     * @param bool $enabled Whether the item is enabled.
+     * @return int Item ID.
+     */
+    private function make_hud_item(int $blockinstanceid, string $name = 'Gold Key', bool $enabled = true): int {
+        global $DB;
+
+        return $DB->insert_record('block_playerhud_items', (object) [
+            'blockinstanceid' => $blockinstanceid,
+            'name' => $name,
+            'xp' => 0,
+            'image' => '',
+            'description' => '',
+            'enabled' => $enabled ? 1 : 0,
+            'secret' => 0,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
     }
 
     /**
@@ -243,5 +325,179 @@ final class mod_form_test extends \advanced_testcase {
         $form->data_preprocessing($defaultvalues);
 
         $this->assertSame([], $defaultvalues);
+    }
+
+    /**
+     * The activity name defaults to PARAM_TEXT, the common case on a site that strips tags
+     * from formatted strings.
+     *
+     * @return void
+     */
+    public function test_name_field_uses_text_param_by_default(): void {
+        set_config('formatstringstriptags', 1);
+
+        $mform = $this->get_quickform($this->build_form());
+
+        $this->assertSame(PARAM_TEXT, $mform->_types['name']);
+    }
+
+    /**
+     * With formatstringstriptags disabled, the name field falls back to PARAM_CLEANHTML so
+     * a title can legitimately contain simple markup.
+     *
+     * @return void
+     */
+    public function test_name_field_uses_cleanhtml_param_when_formatstringstriptags_disabled(): void {
+        set_config('formatstringstriptags', 0);
+
+        $mform = $this->get_quickform($this->build_form());
+
+        $this->assertSame(PARAM_CLEANHTML, $mform->_types['name']);
+    }
+
+    /**
+     * When block_playerhud is configured for the course, the HUD reward selects are added to
+     * the form — the branch that never fires for a course with no HUD block at all.
+     *
+     * @return void
+     */
+    public function test_definition_includes_hud_item_selects_when_playerhud_available(): void {
+        $this->skip_if_no_playerhud();
+        $blockinstanceid = $this->make_hud_block($this->course);
+        $this->make_hud_item($blockinstanceid, 'Gold Key');
+
+        $mform = $this->get_quickform($this->build_form());
+
+        $this->assertTrue($mform->elementExists('hudcorrectitem'));
+        $this->assertTrue($mform->elementExists('hudretrycostitem'));
+        $this->assertTrue($mform->elementExists('hudretrycostqty'));
+    }
+
+    /**
+     * A stored hudcorrectitem pointing at an item that still exists, but was since disabled,
+     * is kept as a selectable (labelled) option instead of silently disappearing from the
+     * select — losing it would wipe the field the next time the form is saved.
+     *
+     * @return void
+     */
+    public function test_stale_hud_item_kept_as_disabled_option_when_item_still_exists(): void {
+        $this->skip_if_no_playerhud();
+        $blockinstanceid = $this->make_hud_block($this->course);
+        $enableditemid = $this->make_hud_item($blockinstanceid, 'Gold Key', true);
+        $disableditemid = $this->make_hud_item($blockinstanceid, 'Retired Badge', false);
+
+        $mform = $this->get_quickform($this->build_form(['hudcorrectitem' => $disableditemid]));
+
+        $select = $mform->getElement('hudcorrectitem');
+        $values = array_map('intval', array_column(array_column($select->_options, 'attr'), 'value'));
+        $this->assertContains($disableditemid, $values);
+        $this->assertContains($enableditemid, $values);
+    }
+
+    /**
+     * A stored hudcorrectitem pointing at an item that no longer exists at all (deleted) is
+     * still kept as a selectable option, labelled accordingly, instead of being dropped.
+     *
+     * @return void
+     */
+    public function test_stale_hud_item_kept_as_deleted_option_when_item_no_longer_exists(): void {
+        $this->skip_if_no_playerhud();
+        $blockinstanceid = $this->make_hud_block($this->course);
+        $this->make_hud_item($blockinstanceid, 'Gold Key');
+        $deletedid = 999999;
+
+        $mform = $this->get_quickform($this->build_form(['hudcorrectitem' => $deletedid]));
+
+        $select = $mform->getElement('hudcorrectitem');
+        $values = array_map('intval', array_column(array_column($select->_options, 'attr'), 'value'));
+        $this->assertContains($deletedid, $values);
+    }
+
+    /**
+     * An invalid YouTube URL is rejected.
+     *
+     * @return void
+     */
+    public function test_rejects_invalid_youtube_url(): void {
+        $form = $this->build_form();
+
+        $errors = $form->validation($this->base_submission([
+            'videotype' => 'youtube',
+            'videourl' => 'https://example.com/not-a-video',
+        ]), []);
+
+        $this->assertArrayHasKey('videourl', $errors);
+    }
+
+    /**
+     * An invalid Vimeo URL is rejected.
+     *
+     * @return void
+     */
+    public function test_rejects_invalid_vimeo_url(): void {
+        $form = $this->build_form();
+
+        $errors = $form->validation($this->base_submission([
+            'videotype' => 'vimeo',
+            'videourl' => 'https://example.com/not-a-video',
+        ]), []);
+
+        $this->assertArrayHasKey('videourl', $errors);
+    }
+
+    /**
+     * A HUD retry cost quantity below 1, with a cost item actually selected, is rejected.
+     *
+     * @return void
+     */
+    public function test_rejects_hud_retry_cost_qty_below_one(): void {
+        $form = $this->build_form();
+
+        $errors = $form->validation($this->base_submission([
+            'hudretrycostitem' => 1,
+            'hudretrycostqty' => 0,
+        ]), []);
+
+        $this->assertArrayHasKey('hudretrycostqty', $errors);
+    }
+
+    /**
+     * add_completion_rules() adds both completion checkboxes and returns their element names,
+     * as core's own completion machinery expects.
+     *
+     * @return void
+     */
+    public function test_add_completion_rules_adds_both_checkboxes(): void {
+        $form = $this->build_form();
+        $mform = $this->get_quickform($form);
+
+        $names = $form->add_completion_rules();
+
+        $this->assertSame(['completionallinteractions', 'completionwatchtoend'], $names);
+        $this->assertTrue($mform->elementExists('completionallinteractions'));
+        $this->assertTrue($mform->elementExists('completionwatchtoend'));
+    }
+
+    /**
+     * completion_rule_enabled() is true whenever at least one of the two rules is checked.
+     *
+     * @return void
+     */
+    public function test_completion_rule_enabled_true_when_either_flag_set(): void {
+        $form = $this->build_form();
+
+        $this->assertTrue($form->completion_rule_enabled(['completionallinteractions' => 1, 'completionwatchtoend' => 0]));
+        $this->assertTrue($form->completion_rule_enabled(['completionallinteractions' => 0, 'completionwatchtoend' => 1]));
+    }
+
+    /**
+     * completion_rule_enabled() is false when neither rule is checked.
+     *
+     * @return void
+     */
+    public function test_completion_rule_enabled_false_when_neither_flag_set(): void {
+        $form = $this->build_form();
+
+        $this->assertFalse($form->completion_rule_enabled(['completionallinteractions' => 0, 'completionwatchtoend' => 0]));
     }
 }

@@ -55,15 +55,15 @@ and cross-instance isolation. Every CI push runs against the full matrix (Moodle
 |-----------|------:|
 | `lib_test.php` | 15 |
 | `privacy/provider_test.php` | 14 |
+| `mod_form_test.php` | 17 |
+| `backup_restore_test.php` | 9 |
 | `cross_instance_security_test.php` | 6 |
-| `backup_restore_test.php` | 6 |
-| `mod_form_test.php` | 6 |
 | `completion/custom_completion_test.php` | 4 |
 | `uninstall_test.php` | 2 |
 | `output/view_render_test.php` | 1 |
-| **Subtotal** | **54** |
+| **Subtotal** | **68** |
 
-| **Grand Total** | **244** |
+| **Grand Total** | **258** |
 
 ```bash
 vendor/bin/phpunit --bootstrap lib/phpunit/bootstrap.php mod/playervideo
@@ -116,22 +116,37 @@ plugin tree instead (`moodle-coverage mod/playervideo --filter .`) surfaces them
 | File / class | Line coverage |
 |--------------|:-------------:|
 | `backup_playervideo_activity_structure_step` | 100% |
-| `restore_playervideo_activity_structure_step` | 90% |
-| `mod_form.php` (`mod_playervideo_mod_form`) | 62% |
+| `mod_form.php` (`mod_playervideo_mod_form`) | 100% |
+| `restore_playervideo_activity_structure_step` | 95% |
 
 The two Fase 9 backup/restore fixes (`videofile`/`posterimage` annotation) are fully exercised
 by `backup_restore_test.php`'s real `backup_and_restore_into_new_course()` round trip — the
-backup step's own single method is 100% covered, and the restore step's residual 10% gap
-predates Fase 9 (an unrelated branch, not the file handling added this phase). `mod_form.php`
-had a real, closeable gap found by this same sweep: `data_preprocessing()` (the method that
-fixed the `videofile`/`posterimage` silent-data-loss bug, see the features page) started at
-**0% method coverage** — proven correct only by live Playwright validation, never by a direct
-unit test. Closed by adding two tests exercising it directly (an existing instance with both
-files preloads two draft areas; a brand new instance is a no-op), moving the method to 100%
-line coverage. The remaining gap in `mod_form.php` (`definition()`,
-`add_completion_rules()`, `completion_rule_enabled()`, `add_stale_hud_item_option()`) predates
-Fase 9 as well — none of those methods had a dedicated unit test before this sweep either, a
-pre-existing blind spot across the whole file, not something these phases introduced.
+backup step's own single method is 100% covered. `mod_form.php` had a real, closeable gap found
+by this sweep: `data_preprocessing()` (the method that fixed the `videofile`/`posterimage`
+silent-data-loss bug, see the features page) started at **0% method coverage** — proven correct
+only by live Playwright validation, never by a direct unit test. A follow-up pass closed every
+branch across the whole file (11 new tests: the HUD reward selects only appearing when
+`block_playerhud` is configured for the course, a stale HUD item id kept as a labelled option
+instead of silently vanishing, the two invalid-URL and the HUD-cost-quantity validation errors,
+`add_completion_rules()`/`completion_rule_enabled()`, and the `formatstringstriptags`-driven
+`PARAM_CLEANHTML` fallback), taking `mod_form.php` from 62% to **100%**.
+
+`restore_playervideo_activity_structure_step` went from 90% to 95% the same way: 3 new tests
+prove `resolve_hud_item()`'s graceful degradation on "Duplicate activity" — a stored HUD item
+reference survives when the block is still in the course, and drops to 0 when it (or the item)
+is gone — plus a corrupted question-type interaction (`questionid` ≤ 0, a state the plugin's own
+UI never produces but a hand-edited backup XML theoretically could) being dropped defensively
+instead of crashing `resolve_questionid()`. The residual 5% is a handful of branches genuinely
+out of reach here: `resolve_hud_item()`'s "restored through block_playerhud's own mapping" path
+only fires on a *full course* backup that also restores the HUD block itself, a deep cross-plugin
+assumption not worth coupling this test suite to; `resolve_questionid()`'s "core's own
+`question_created` mapping succeeded" branch depends on Moodle's own dedup heuristic, already
+documented in the plugin's own SCOPE as non-deterministic across Moodle versions; and four
+defensive early-returns (`process_playervideo_progress`/`_attempt`/`_response`'s own-user-mapping
+miss, `process_playervideo_polloption`'s interaction-mapping miss) only trigger on a
+partial-user-selection backup, which would need a materially heavier test harness than the
+value it would prove — mirrors the plugin's own `resolve_questionid` core-behavior note in
+spirit, not a new kind of gap.
 
 > The AI-facing classes (`ai_service`, `generate_question_ai`, `generate_questions_batch`,
 > `generate_response_correction`, `generate_di_summary`) show the lowest PHPUnit line coverage

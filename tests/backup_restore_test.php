@@ -479,6 +479,149 @@ final class backup_restore_test extends \advanced_testcase {
     }
 
     /**
+     * Inserts a block_instances record for block_playerhud in the given course context — same
+     * pattern as hud_service_test.php's own make_block_instance().
+     *
+     * @param \stdClass $course Course object.
+     * @return int Block instance ID.
+     */
+    private function make_hud_block(\stdClass $course): int {
+        global $DB;
+        $context = \context_course::instance($course->id);
+
+        return $DB->insert_record('block_instances', (object) [
+            'blockname' => 'playerhud', 'parentcontextid' => $context->id, 'showinsubcontexts' => 0,
+            'pagetypepattern' => 'course-view-*', 'subpagepattern' => null, 'defaultregion' => 'side-pre',
+            'defaultweight' => 0, 'configdata' => base64_encode(serialize(new \stdClass())),
+            'timecreated' => time(), 'timemodified' => time(),
+        ]);
+    }
+
+    /**
+     * Duplicates a course module using whichever API this Moodle version supports — same
+     * guarded pattern as test_duplicate_activity() above.
+     *
+     * @param \stdClass $course Course the module belongs to.
+     * @param \stdClass $cm Course module record to duplicate.
+     * @return \stdClass|\core_course\cm_info The new course module record.
+     */
+    private function duplicate_activity(\stdClass $course, \stdClass $cm): \stdClass|\core_course\cm_info {
+        if (method_exists(cmactions::class, 'duplicate')) {
+            return (new cmactions($course))->duplicate($cm->id);
+        }
+
+        return duplicate_module($course, $cm);
+    }
+
+    /**
+     * "Duplicate activity" never backs up the course's own PlayerHUD block (only the activity
+     * itself) — so resolve_hud_item() takes its last-resort fallback: the original item id is
+     * kept as-is when it still legitimately belongs to a block instance in the (same) course.
+     *
+     * @return void
+     */
+    public function test_duplicate_activity_keeps_hud_item_reference_when_block_still_in_course(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/course/lib.php');
+        if (!$DB->get_manager()->table_exists('block_playerhud_items')) {
+            $this->markTestSkipped('block_playerhud not installed.');
+        }
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $blockinstanceid = $this->make_hud_block($course);
+        $itemid = $DB->insert_record('block_playerhud_items', (object) [
+            'blockinstanceid' => $blockinstanceid, 'name' => 'Gold Key', 'xp' => 0, 'image' => '',
+            'description' => '', 'enabled' => 1, 'secret' => 0, 'timecreated' => time(), 'timemodified' => time(),
+        ]);
+        $instance = $this->getDataGenerator()->create_module('playervideo', [
+            'course' => $course->id, 'hudcorrectitem' => $itemid, 'hudretrycostitem' => $itemid,
+        ]);
+        $cm = get_coursemodule_from_instance('playervideo', $instance->id, $course->id, false, MUST_EXIST);
+
+        $newcm = $this->duplicate_activity($course, $cm);
+
+        $newinstance = $DB->get_record('playervideo', ['id' => $newcm->instance], '*', MUST_EXIST);
+        $this->assertSame($itemid, (int) $newinstance->hudcorrectitem);
+        $this->assertSame($itemid, (int) $newinstance->hudretrycostitem);
+    }
+
+    /**
+     * If the PlayerHUD block (or the specific item) is gone from the course by the time the
+     * activity is duplicated, resolve_hud_item() drops the stale reference to 0 instead of
+     * carrying forward an id that no longer resolves to anything real.
+     *
+     * @return void
+     */
+    public function test_duplicate_activity_drops_hud_item_reference_when_block_removed_from_course(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/course/lib.php');
+        if (!$DB->get_manager()->table_exists('block_playerhud_items')) {
+            $this->markTestSkipped('block_playerhud not installed.');
+        }
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $blockinstanceid = $this->make_hud_block($course);
+        $itemid = $DB->insert_record('block_playerhud_items', (object) [
+            'blockinstanceid' => $blockinstanceid, 'name' => 'Gold Key', 'xp' => 0, 'image' => '',
+            'description' => '', 'enabled' => 1, 'secret' => 0, 'timecreated' => time(), 'timemodified' => time(),
+        ]);
+        $instance = $this->getDataGenerator()->create_module('playervideo', [
+            'course' => $course->id, 'hudcorrectitem' => $itemid, 'hudretrycostitem' => $itemid,
+        ]);
+        $cm = get_coursemodule_from_instance('playervideo', $instance->id, $course->id, false, MUST_EXIST);
+
+        // Simulates the block having since been removed from the course — the same real-world
+        // scenario resolve_hud_item()'s own docblock describes ("or 0 if none applies").
+        $DB->delete_records('block_playerhud_items', ['id' => $itemid]);
+        $DB->delete_records('block_instances', ['id' => $blockinstanceid]);
+
+        $newcm = $this->duplicate_activity($course, $cm);
+
+        $newinstance = $DB->get_record('playervideo', ['id' => $newcm->instance], '*', MUST_EXIST);
+        $this->assertSame(0, (int) $newinstance->hudcorrectitem);
+        $this->assertSame(0, (int) $newinstance->hudretrycostitem);
+    }
+
+    /**
+     * A question-type interaction whose questionid is invalid (0 or negative — a state the
+     * plugin's own UI/API never produces, since deleting an in-use question is blocked, but a
+     * hand-edited or corrupted backup XML theoretically could feed in) is dropped defensively
+     * on restore instead of crashing resolve_questionid() or inserting a broken reference.
+     *
+     * @return void
+     */
+    public function test_backup_restore_drops_question_interaction_with_invalid_questionid(): void {
+        global $DB;
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('playervideo', ['course' => $course->id]);
+
+        $now = time();
+        $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $instance->id, 'timestamp' => 10, 'type' => 'question', 'weight' => 2,
+            'questionid' => 0, 'notetext' => null, 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $instance->id, 'timestamp' => 20, 'type' => 'note', 'weight' => 1,
+            'questionid' => null, 'notetext' => 'Survives regardless', 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $newcourse = $this->backup_and_restore_into_new_course($course);
+
+        $this->assertDebuggingCalled();
+
+        $newinstance = $DB->get_record('playervideo', ['course' => $newcourse->id], '*', MUST_EXIST);
+        $newinteractions = $DB->get_records('playervideo_interactions', ['playervideoid' => $newinstance->id]);
+        $this->assertCount(1, $newinteractions);
+        $this->assertSame('note', reset($newinteractions)->type);
+    }
+
+    /**
      * Backs up the given course and restores it into a brand new course, returning that
      * course. Mirrors mod_playerwords's own full-course backup/restore test pattern.
      *

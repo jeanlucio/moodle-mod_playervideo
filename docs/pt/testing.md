@@ -56,15 +56,15 @@ validação ao vivo de ponta a ponta contra provedores de IA reais (Gemini/Groq/
 |-------------------|------:|
 | `lib_test.php` | 15 |
 | `privacy/provider_test.php` | 14 |
+| `mod_form_test.php` | 17 |
+| `backup_restore_test.php` | 9 |
 | `cross_instance_security_test.php` | 6 |
-| `backup_restore_test.php` | 6 |
-| `mod_form_test.php` | 6 |
 | `completion/custom_completion_test.php` | 4 |
 | `uninstall_test.php` | 2 |
 | `output/view_render_test.php` | 1 |
-| **Subtotal** | **54** |
+| **Subtotal** | **68** |
 
-| **Total Geral** | **244** |
+| **Total Geral** | **258** |
 
 ```bash
 vendor/bin/phpunit --bootstrap lib/phpunit/bootstrap.php mod/playervideo
@@ -117,24 +117,39 @@ tabela acima — restrita a `classes/` — nunca os enxerga. Medindo a árvore i
 | Arquivo / classe | Cobertura de linhas |
 |-------------------|:--------------------:|
 | `backup_playervideo_activity_structure_step` | 100% |
-| `restore_playervideo_activity_structure_step` | 90% |
-| `mod_form.php` (`mod_playervideo_mod_form`) | 62% |
+| `mod_form.php` (`mod_playervideo_mod_form`) | 100% |
+| `restore_playervideo_activity_structure_step` | 95% |
 
 Os dois fixes de backup/restore da Fase 9 (anotação de `videofile`/`posterimage`) são
 inteiramente exercitados pelo round trip real de `backup_and_restore_into_new_course()` do
-`backup_restore_test.php` — o único método da etapa de backup está 100% coberto, e o gap
-residual de 10% da etapa de restore é anterior à Fase 9 (um ramo não relacionado, não o
-tratamento de arquivo adicionado nesta fase). `mod_form.php` tinha uma lacuna real e fechável,
-achada por essa mesma varredura: `data_preprocessing()` (o método que corrigiu o bug de perda
-silenciosa de dado do `videofile`/`posterimage`, ver a página de funcionalidades) começou com
-**0% de cobertura de método** — provado correto só por validação ao vivo via Playwright, nunca
-por um teste unitário direto. Fechado adicionando dois testes que o exercitam diretamente (uma
-instância existente com os dois arquivos pré-carrega duas áreas de rascunho; uma instância nova
-é um no-op), levando o método a 100% de cobertura de linhas. O gap restante em `mod_form.php`
-(`definition()`, `add_completion_rules()`, `completion_rule_enabled()`,
-`add_stale_hud_item_option()`) também é anterior à Fase 9 — nenhum desses métodos tinha teste
-unitário dedicado antes desta varredura, um ponto cego pré-existente no arquivo inteiro, não algo
-que estas fases introduziram.
+`backup_restore_test.php` — o único método da etapa de backup está 100% coberto. `mod_form.php`
+tinha uma lacuna real e fechável, achada por essa varredura: `data_preprocessing()` (o método que
+corrigiu o bug de perda silenciosa de dado do `videofile`/`posterimage`, ver a página de
+funcionalidades) começou com **0% de cobertura de método** — provado correto só por validação ao
+vivo via Playwright, nunca por um teste unitário direto. Uma segunda rodada fechou todo o resto
+do arquivo (11 testes novos: os seletores de recompensa do HUD só aparecendo quando o
+`block_playerhud` está configurado no curso, um id de item do HUD "obsoleto" mantido como opção
+rotulada em vez de simplesmente sumir, os dois erros de URL inválida e o de quantidade de custo
+do HUD na validação, `add_completion_rules()`/`completion_rule_enabled()`, e o fallback pra
+`PARAM_CLEANHTML` guiado por `formatstringstriptags`), levando `mod_form.php` de 62% pra **100%**.
+
+`restore_playervideo_activity_structure_step` foi de 90% pra 95% do mesmo jeito: 3 testes novos
+provam a degradação graciosa de `resolve_hud_item()` em "Duplicar atividade" — uma referência de
+item do HUD sobrevive quando o bloco ainda está no curso, e cai pra 0 quando ele (ou o item) some
+— mais uma interação corrompida do tipo pergunta (`questionid` ≤ 0, um estado que a própria UI/API
+do plugin nunca produz, mas que um XML de backup editado à mão teoricamente poderia) sendo
+descartada de forma defensiva em vez de quebrar `resolve_questionid()`. O gap residual de 5% é um
+punhado de ramos genuinamente fora de alcance aqui: o caminho "restaurado pelo próprio mapeamento
+do block_playerhud" de `resolve_hud_item()` só dispara num backup de *curso inteiro* que também
+restaura o bloco do HUD, uma suposição profunda entre plugins que não compensa acoplar a esta
+suíte; o ramo "o mapeamento `question_created` do próprio core funcionou" de `resolve_questionid()`
+depende da heurística de deduplicação do próprio Moodle, já documentada no SCOPE do plugin como
+não-determinística entre versões; e quatro retornos antecipados defensivos
+(`process_playervideo_progress`/`_attempt`/`_response` no mapeamento do próprio usuário,
+`process_playervideo_polloption` no mapeamento da interação) só disparam num backup com seleção
+parcial de usuários, o que exigiria um aparato de teste bem mais pesado que o valor que provaria
+— no mesmo espírito da própria nota do `resolve_questionid` sobre comportamento do core, não um
+tipo novo de lacuna.
 
 > As classes voltadas pra IA (`ai_service`, `generate_question_ai`, `generate_questions_batch`,
 > `generate_response_correction`, `generate_di_summary`) mostram a menor cobertura de linhas
