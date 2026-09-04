@@ -109,6 +109,51 @@ video.ph-video-embed {
 }
 
 /*
+ * Full-screen presentation targets the whole stage (video + timeline + controls), not just the
+ * video element alone — the play/pause button and timeline live outside the video wrapper (see
+ * the playpause-btn comment below) and would otherwise be unreachable while full screen. Edge to
+ * edge and pure black, matching the native YouTube/Vimeo fullscreen chrome (no rounded corners
+ * or stage padding, which would otherwise show as a visible inset "window" instead of filling
+ * the physical screen).
+ */
+.path-mod-playervideo .playervideo-stage:fullscreen {
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    background: var(--pv-fullscreen-bg, #000);
+}
+
+/*
+ * The video wrapper becomes a plain sizing box (flex:1 takes whatever height the timeline/
+ * controls row below does not need); the video/iframe itself is absolutely positioned to fill
+ * it exactly and letterboxed via object-fit, so it always maximises to the screen's actual
+ * aspect ratio instead of being capped by the fixed 16:9 box used in the inline layout.
+ */
+.path-mod-playervideo .playervideo-stage:fullscreen .playervideo-video-wrapper {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.path-mod-playervideo .playervideo-stage:fullscreen .playervideo-video-wrapper #playervideo-target {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 0;
+    background: var(--pv-fullscreen-bg, #000);
+}
+
+.path-mod-playervideo .playervideo-stage:fullscreen .playervideo-timeline-wrap {
+    padding: 0 1rem 1rem;
+}
+
+/*
  * Custom subtitle renderer for a manually authored caption (see player.js updateCaptionOverlay)
  * — the only rendering path available for a manual caption, since neither the YouTube nor the
  * Vimeo embed API accepts an arbitrary custom track for burn-in. A native track, by contrast,

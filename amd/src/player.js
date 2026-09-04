@@ -475,6 +475,77 @@ const initSpeedControl = () => {
 };
 
 /**
+ * Toggles full-screen presentation of the player stage (the video plus its playback controls,
+ * not just the video element alone) — falls back to the WebKit-prefixed API, still required by
+ * Safari versions that predate the unprefixed Fullscreen API.
+ *
+ * @returns {Promise<void>}
+ */
+const toggleFullscreen = async() => {
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+        if (document.exitFullscreen) {
+            await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        }
+        return;
+    }
+
+    const stage = document.getElementById('playervideo-stage');
+    if (stage.requestFullscreen) {
+        await stage.requestFullscreen();
+    } else if (stage.webkitRequestFullscreen) {
+        stage.webkitRequestFullscreen();
+    }
+};
+
+/**
+ * Updates the full-screen button's icon and label to reflect the current state — driven by the
+ * fullscreenchange event so it also stays correct when the browser itself exits full screen
+ * (e.g. the Esc key), not only when the button itself is clicked.
+ *
+ * @returns {Promise<void>}
+ */
+const updateFullscreenButton = async() => {
+    const button = document.getElementById('playervideo-fullscreen-btn');
+    if (!button) {
+        return;
+    }
+    const active = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+    button.setAttribute('aria-label', await getString(active ? 'exitfullscreen' : 'fullscreen', 'mod_playervideo'));
+    const icon = button.querySelector('i');
+    icon.classList.toggle('fa-expand', !active);
+    icon.classList.toggle('fa-compress', active);
+};
+
+/**
+ * Wires the full-screen toggle button, hiding it outright on a browser with neither the
+ * unprefixed nor the WebKit-prefixed Fullscreen API (e.g. iPhone Safari, which only supports
+ * full screen on a bare <video> element, not an arbitrary container like the player stage).
+ *
+ * Called once from init(), not from initTimelineControls(): the button is visible as soon as
+ * the player screen shows, which happens well before adapter.getDuration() resolves (the
+ * source adapter is still loading its iframe/video element at that point) — wiring the click
+ * handler only after that would leave the visible button non-functional for however long the
+ * source takes to finish loading.
+ */
+const initFullscreenControl = () => {
+    const button = document.getElementById('playervideo-fullscreen-btn');
+    const stage = document.getElementById('playervideo-stage');
+    if (!button || !stage) {
+        return;
+    }
+    if (!stage.requestFullscreen && !stage.webkitRequestFullscreen) {
+        button.hidden = true;
+        return;
+    }
+
+    button.addEventListener('click', toggleFullscreen);
+    document.addEventListener('fullscreenchange', updateFullscreenButton);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+};
+
+/**
  * Escapes a string for safe insertion as an HTML attribute value or text content. The
  * textContent/innerHTML round-trip alone only escapes &, < and > — quotes must be escaped
  * separately or a value placed inside a double- or single-quoted attribute can break out of it.
@@ -1134,4 +1205,5 @@ export const init = () => {
 
     document.getElementById('playervideo-finish-btn')?.addEventListener('click', () => finishAttempt(false));
     document.getElementById('playervideo-disummary-btn')?.addEventListener('click', showDiSummary);
+    initFullscreenControl();
 };

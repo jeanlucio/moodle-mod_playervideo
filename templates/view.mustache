@@ -91,7 +91,7 @@
 
     <div id="playervideo-player-screen" hidden>
         <div id="playervideo-announcer" class="visually-hidden" aria-live="polite"></div>
-        <div class="playervideo-stage mb-3">
+        <div class="playervideo-stage mb-3" id="playervideo-stage">
             <div class="playervideo-video-wrapper">
                 <div id="playervideo-target" class="ph-video-embed"></div>
                 <div id="playervideo-caption-overlay" class="playervideo-caption-overlay" hidden></div>
@@ -137,6 +137,10 @@
                     <button type="button" class="btn btn-outline-secondary btn-sm" id="playervideo-transcript-toggle"
                         aria-expanded="false" aria-controls="playervideo-transcript-panel" hidden>
                         {{#str}}transcriptpanel, mod_playervideo{{/str}}
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="playervideo-fullscreen-btn"
+                        aria-label="{{#str}}fullscreen, mod_playervideo{{/str}}">
+                        <i class="fa fa-expand" aria-hidden="true"></i>
                     </button>
                 </div>
             </div>
