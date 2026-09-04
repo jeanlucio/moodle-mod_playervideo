@@ -19,6 +19,13 @@
  * "Anti-skip"). A jump larger than JUMP_THRESHOLD_SECONDS is never counted as watched, mirroring
  * the same rule already used by format_streaming.
  *
+ * Playback speed (Fase 7, see the plugin SCOPE) never needed a change here: every adapter's
+ * getCurrentTime()/onTimeUpdate() already reports the actual video position, not wall-clock
+ * time, so a delta between two ticks is always measured in video-seconds regardless of the
+ * rate the student chose — a 3-second jump per tick at 2x playback is still only ~1.5 real
+ * seconds of polling, safely under JUMP_THRESHOLD_SECONDS either way. Verified live at 2x
+ * (the fastest preset offered) as part of closing Fase 7, not just assumed from the APIs' docs.
+ *
  * @module     mod_playervideo/progress_tracker
  * @copyright  2026 Jean Lúcio
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later

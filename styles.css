@@ -129,13 +129,15 @@ video.ph-video-embed {
     pointer-events: none;
 }
 
-.path-mod-playervideo .playervideo-caption-controls {
+.path-mod-playervideo .playervideo-playback-controls {
     grid-column: 1 / -1;
     display: flex;
     justify-content: flex-end;
+    gap: 0.5rem;
     margin-top: 0.5rem;
 }
 
+.path-mod-playervideo .playervideo-speed-controls select,
 .path-mod-playervideo .playervideo-caption-controls select {
     max-width: 12rem;
 }

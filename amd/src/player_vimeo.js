@@ -17,7 +17,7 @@
  * Vimeo Player.js adapter, exposing the same interface as player_youtube/player_html5 so
  * amd/src/player.js can drive any of the three sources uniformly: ready(), play(), pause(),
  * seek(seconds), getCurrentTime(), getDuration(), onTimeUpdate(callback), onEnded(callback),
- * getCaptionTracks(), setCaptionTrack(code).
+ * getCaptionTracks(), setCaptionTrack(code), setRate(rate), getRate().
  *
  * Unlike the YouTube adapter, Player.js exposes a native 'timeupdate' event, so no polling
  * is needed here.
@@ -92,5 +92,11 @@ export const createPlayer = async(targetId, embedUrl) => {
                 vimeoplayer.disableTextTrack().catch(() => { /* Nothing to disable — ignore. */ });
             }
         },
+        // Playback rate control is a per-video Vimeo setting (Plus/Pro account), same shape of
+        // limitation as native captions above — setPlaybackRate() rejects for a video where it
+        // was never enabled, so the selector simply has no visible effect there instead of
+        // throwing.
+        setRate: (rate) => vimeoplayer.setPlaybackRate(rate).catch(() => { /* Not enabled for this video. */ }),
+        getRate: () => vimeoplayer.getPlaybackRate().catch(() => 1),
     };
 };

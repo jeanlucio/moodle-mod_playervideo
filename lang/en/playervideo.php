@@ -186,6 +186,7 @@ $string['pending'] = 'Pending';
 $string['pendingcorrectionnotice'] = 'Your open-question answers are pending the teacher\'s review; the grade for this attempt will appear once they are marked.';
 $string['pendingcorrectionsheader'] = 'Pending corrections';
 $string['play'] = 'Play';
+$string['playbackspeed'] = 'Playback speed';
 $string['playervideo:addinstance'] = 'Add a new PlayerVideo activity';
 $string['playervideo:attempt'] = 'Attempt a PlayerVideo activity';
 $string['playervideo:manage'] = 'Manage interactions, captions and questions';

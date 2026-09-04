@@ -186,6 +186,7 @@ $string['pending'] = 'Pendente';
 $string['pendingcorrectionnotice'] = 'Suas respostas de questões abertas estão pendentes de revisão do professor; a nota desta tentativa aparecerá assim que forem corrigidas.';
 $string['pendingcorrectionsheader'] = 'Correções pendentes';
 $string['play'] = 'Reproduzir';
+$string['playbackspeed'] = 'Velocidade de reprodução';
 $string['playervideo:addinstance'] = 'Adicionar uma nova atividade PlayerVideo';
 $string['playervideo:attempt'] = 'Realizar uma atividade PlayerVideo';
 $string['playervideo:manage'] = 'Gerenciar interações, legendas e perguntas';

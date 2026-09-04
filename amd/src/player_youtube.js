@@ -17,7 +17,7 @@
  * YouTube IFrame API adapter, exposing the same interface as player_vimeo/player_html5 so
  * amd/src/player.js can drive any of the three sources uniformly: ready(), play(), pause(),
  * seek(seconds), getCurrentTime(), getDuration(), onTimeUpdate(callback), onEnded(callback),
- * getCaptionTracks(), setCaptionTrack(code).
+ * getCaptionTracks(), setCaptionTrack(code), setRate(rate), getRate().
  *
  * The IFrame API has no native timeupdate event, so onTimeUpdate is backed by a short poll
  * started once the player fires its own onReady — the same technique mod_interactivevideo
@@ -185,6 +185,11 @@ export const createPlayer = async(targetId, embedUrl) => {
         setCaptionTrack: (code) => {
             ytplayer.setOption('captions', 'track', code ? {languageCode: code} : {});
         },
+        // The IFrame API's own docs describe setPlaybackRate() as "suggested" — the player
+        // silently ignores a rate it does not support for the given video, rather than
+        // rejecting, so there is nothing to catch here (unlike Vimeo's setRate()).
+        setRate: (rate) => ytplayer.setPlaybackRate(rate),
+        getRate: () => Promise.resolve(ytplayer.getPlaybackRate()),
         destroy: () => window.clearInterval(pollTimer),
     };
 };

@@ -17,7 +17,8 @@
  * Native <video> adapter for an uploaded (HTML5) source, exposing the same interface as
  * player_youtube/player_vimeo so amd/src/player.js can drive any of the three sources
  * uniformly: ready(), play(), pause(), seek(seconds), getCurrentTime(), getDuration(),
- * onTimeUpdate(callback), onEnded(callback), getCaptionTracks(), setCaptionTrack(code).
+ * onTimeUpdate(callback), onEnded(callback), getCaptionTracks(), setCaptionTrack(code),
+ * setRate(rate), getRate().
  *
  * There is no "native" caption source for an uploaded video — there is no "YouTube of the video
  * itself" to mirror — so getCaptionTracks() always resolves empty and setCaptionTrack() is a
@@ -66,5 +67,9 @@ export const createPlayer = async(targetId, embedUrl) => {
         onEnded: (callback) => video.addEventListener('ended', () => callback()),
         getCaptionTracks: () => Promise.resolve([]),
         setCaptionTrack: () => { /* No native source to select a track on. */ },
+        setRate: (rate) => {
+            video.playbackRate = rate;
+        },
+        getRate: () => Promise.resolve(video.playbackRate),
     };
 };

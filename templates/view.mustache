@@ -106,13 +106,28 @@
                     <div class="playervideo-playhead" id="playervideo-playhead"></div>
                     <div id="playervideo-markers"></div>
                 </div>
-                <div class="playervideo-caption-controls">
-                    <label class="visually-hidden" for="playervideo-caption-select">
-                        {{#str}}subtitles, mod_playervideo{{/str}}
-                    </label>
-                    <select class="form-select form-select-sm" id="playervideo-caption-select">
-                        <option value="">{{#str}}subtitlesoff, mod_playervideo{{/str}}</option>
-                    </select>
+                <div class="playervideo-playback-controls">
+                    <div class="playervideo-speed-controls">
+                        <label class="visually-hidden" for="playervideo-speed-select">
+                            {{#str}}playbackspeed, mod_playervideo{{/str}}
+                        </label>
+                        <select class="form-select form-select-sm" id="playervideo-speed-select">
+                            <option value="0.5">0.5x</option>
+                            <option value="0.75">0.75x</option>
+                            <option value="1" selected>1x</option>
+                            <option value="1.25">1.25x</option>
+                            <option value="1.5">1.5x</option>
+                            <option value="2">2x</option>
+                        </select>
+                    </div>
+                    <div class="playervideo-caption-controls">
+                        <label class="visually-hidden" for="playervideo-caption-select">
+                            {{#str}}subtitles, mod_playervideo{{/str}}
+                        </label>
+                        <select class="form-select form-select-sm" id="playervideo-caption-select">
+                            <option value="">{{#str}}subtitlesoff, mod_playervideo{{/str}}</option>
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>

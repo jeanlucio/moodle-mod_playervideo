@@ -329,6 +329,21 @@ const loadCaptionOptions = async() => {
 };
 
 /**
+ * Wires the playback-speed selector to the active adapter. Always reset to 1x on load — a
+ * chosen speed is a per-viewing convenience, not something remembered across attempts or
+ * activities, so a returning student is never confused by a video restarting faster/slower
+ * than they left it.
+ */
+const initSpeedControl = () => {
+    const select = document.getElementById('playervideo-speed-select');
+    if (!select) {
+        return;
+    }
+    select.value = '1';
+    select.addEventListener('change', () => adapter.setRate(parseFloat(select.value)));
+};
+
+/**
  * Escapes a string for safe insertion as an HTML attribute value.
  *
  * @param {string} text Raw text.
@@ -351,6 +366,7 @@ const initTimelineControls = async() => {
     document.getElementById('playervideo-ruler-end').textContent = formatTime(duration);
     renderMarkers();
     await setPlayingState(false);
+    initSpeedControl();
     await loadCaptionOptions();
 
     adapter.onTimeUpdate((time) => {
