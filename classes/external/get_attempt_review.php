@@ -85,6 +85,18 @@ class get_attempt_review extends external_api {
             $responsesbyinteraction[$response->interactionid] = $response;
         }
 
+        $questionids = array_values(array_filter(array_map(
+            static fn($record) => $record->type === 'question' ? (int) $record->questionid : null,
+            $interactions
+        )));
+        $questionsbyid = question_service::get_questions_for_review($questionids, $context);
+
+        $pollinteractionids = array_values(array_filter(array_map(
+            static fn($record) => $record->type === 'poll' ? (int) $record->id : null,
+            $interactions
+        )));
+        $polloptionsbyinteraction = self::get_poll_review_options_bulk($pollinteractionids);
+
         $result = [];
         foreach ($interactions as $interaction) {
             $response = $responsesbyinteraction[$interaction->id] ?? null;
@@ -93,7 +105,11 @@ class get_attempt_review extends external_api {
                 'interactionid' => (int) $interaction->id,
                 'timestamp' => (float) $interaction->timestamp,
                 'type' => $interaction->type,
-                'notetext' => $interaction->type !== 'question' ? ($interaction->notetext ?? '') : '',
+                'notetext' => $interaction->type !== 'question' ? format_text(
+                    $interaction->notetext ?? '',
+                    $interaction->notetextformat,
+                    ['context' => $context]
+                ) : '',
                 'questiontext' => '',
                 'qtype' => '',
                 'options' => [],
@@ -105,7 +121,7 @@ class get_attempt_review extends external_api {
             ];
 
             if ($interaction->type === 'question' && $interaction->questionid !== null) {
-                $question = question_service::get_question_for_review((int) $interaction->questionid, $context);
+                $question = $questionsbyid[(int) $interaction->questionid] ?? null;
                 if ($question !== null) {
                     $row['questiontext'] = $question['text'];
                     $row['qtype'] = $question['type'];
@@ -119,7 +135,15 @@ class get_attempt_review extends external_api {
                     ], $question['options']);
                 }
             } else if ($interaction->type === 'poll') {
-                $row['options'] = self::get_poll_review_options((int) $interaction->id, $response);
+                $polloptions = $polloptionsbyinteraction[(int) $interaction->id] ?? [];
+                $row['options'] = array_map(static fn(array $option): array => [
+                    'id' => $option['id'],
+                    'text' => $option['text'],
+                    'correct' => false,
+                    'selected' => $response !== null && (int) $response->polloptionid === $option['id'],
+                    'votes' => $option['votes'],
+                    'percent' => $option['percent'],
+                ], $polloptions);
             }
 
             if ($response !== null) {
@@ -136,39 +160,55 @@ class get_attempt_review extends external_api {
     }
 
     /**
-     * Builds the poll options review row: the full vote distribution (same aggregate any voter
-     * would see, see get_poll_results) plus which option, if any, this specific attempt chose.
+     * Builds the poll options review data for several poll interactions at once, grouped by
+     * interaction id: the full vote distribution (same aggregate any voter would see, see
+     * get_poll_results) for each — avoids one poll_options query + one vote-count query per poll
+     * interaction in a loop. Never includes 'selected', since that depends on which attempt is
+     * being reviewed, not on the interaction alone — the caller applies it per row.
      *
-     * @param int $interactionid Poll interaction id.
-     * @param \stdClass|null $response This attempt's response to the poll, if any.
-     * @return array Options with vote counts/percentages and the selected flag.
+     * @param int[] $interactionids Poll interaction ids.
+     * @return array<int, array> Interaction id => list of {id, text, votes, percent}.
      */
-    private static function get_poll_review_options(int $interactionid, ?\stdClass $response): array {
+    private static function get_poll_review_options_bulk(array $interactionids): array {
         global $DB;
 
-        $options = $DB->get_records('playervideo_poll_options', ['interactionid' => $interactionid], 'sortorder ASC');
+        if (empty($interactionids)) {
+            return [];
+        }
 
-        $votecounts = $DB->get_records_sql(
-            'SELECT polloptionid, COUNT(id) AS votes
-               FROM {playervideo_responses}
-              WHERE interactionid = :interactionid AND status = :status
-           GROUP BY polloptionid',
-            ['interactionid' => $interactionid, 'status' => 'voted']
+        [$insql, $inparams] = $DB->get_in_or_equal($interactionids, SQL_PARAMS_NAMED, 'iid');
+        $options = $DB->get_records_select(
+            'playervideo_poll_options',
+            "interactionid $insql",
+            $inparams,
+            'interactionid ASC, sortorder ASC'
         );
 
-        $totalvotes = 0;
-        foreach ($votecounts as $row) {
-            $totalvotes += (int) $row->votes;
+        // A recordset, not get_records_sql(), because the grouping key (interactionid +
+        // polloptionid) is not the single first column — get_records_sql() would key the array
+        // by interactionid alone and silently drop every option but the last one.
+        $votecountsbyinteraction = [];
+        $totalvotesbyinteraction = [];
+        $sql = "SELECT interactionid, polloptionid, COUNT(id) AS votes
+                  FROM {playervideo_responses}
+                 WHERE interactionid $insql AND status = :status
+              GROUP BY interactionid, polloptionid";
+        $voterows = $DB->get_recordset_sql($sql, array_merge($inparams, ['status' => 'voted']));
+        foreach ($voterows as $row) {
+            $iid = (int) $row->interactionid;
+            $votecountsbyinteraction[$iid][(int) $row->polloptionid] = (int) $row->votes;
+            $totalvotesbyinteraction[$iid] = ($totalvotesbyinteraction[$iid] ?? 0) + (int) $row->votes;
         }
+        $voterows->close();
 
         $result = [];
         foreach ($options as $option) {
-            $votes = isset($votecounts[$option->id]) ? (int) $votecounts[$option->id]->votes : 0;
-            $result[] = [
+            $iid = (int) $option->interactionid;
+            $votes = $votecountsbyinteraction[$iid][(int) $option->id] ?? 0;
+            $totalvotes = $totalvotesbyinteraction[$iid] ?? 0;
+            $result[$iid][] = [
                 'id' => (int) $option->id,
                 'text' => $option->optiontext,
-                'correct' => false,
-                'selected' => $response !== null && (int) $response->polloptionid === (int) $option->id,
                 'votes' => $votes,
                 'percent' => $totalvotes > 0 ? round(($votes / $totalvotes) * 100, 1) : 0.0,
             ];

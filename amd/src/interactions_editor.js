@@ -990,9 +990,10 @@ const renderNoteEditor = async(existing) => {
         <div>
             <h2 class="playervideo-section-title">${escapeHtml(heading)}</h2>
             <label class="playervideo-field-label" for="playervideo-note-text">${escapeHtml(label)}</label>
-            <textarea class="form-control" id="playervideo-note-text" rows="3">${existing ? existing.notetext : ''}</textarea>
+            <textarea class="form-control" id="playervideo-note-text" rows="3"></textarea>
         </div>
     `;
+    document.getElementById('playervideo-note-text').value = existing ? existing.notetext : '';
 
     renderFooter(async() => {
         const notetext = document.getElementById('playervideo-note-text').value;
@@ -1036,8 +1037,7 @@ const renderPollEditor = async(existing) => {
         <div>
             <h2 class="playervideo-section-title">${escapeHtml(heading)}</h2>
             <label class="playervideo-field-label" for="playervideo-poll-prompt">${escapeHtml(promptlabel)}</label>
-            <textarea class="form-control mb-2" id="playervideo-poll-prompt" rows="2"
-                >${existing ? existing.notetext : ''}</textarea>
+            <textarea class="form-control mb-2" id="playervideo-poll-prompt" rows="2"></textarea>
             <div id="playervideo-poll-options"></div>
             <button type="button" class="playervideo-addanswer"
                 id="playervideo-add-poll-option">${escapeHtml(addoptionlabel)}</button>
@@ -1045,6 +1045,7 @@ const renderPollEditor = async(existing) => {
                 id="playervideo-poll-option-count">${escapeHtml(countlabel)}</div>
         </div>
     `;
+    document.getElementById('playervideo-poll-prompt').value = existing ? existing.notetext : '';
 
     const optionscontainer = document.getElementById('playervideo-poll-options');
     const addbutton = document.getElementById('playervideo-add-poll-option');
@@ -1063,10 +1064,11 @@ const renderPollEditor = async(existing) => {
         const row = document.createElement('div');
         row.className = 'input-group mb-1 playervideo-poll-option-row';
         row.innerHTML = `
-            <input type="text" class="form-control playervideo-poll-option-text" value="${escapeHtml(text)}">
+            <input type="text" class="form-control playervideo-poll-option-text">
             <button type="button" class="playervideo-answer-remove" data-action="remove"
                 aria-label="${escapeHtml(removeoptionlabel)}">${ICON_TRASH}</button>
         `;
+        row.querySelector('.playervideo-poll-option-text').value = text;
         row.querySelector('[data-action="remove"]').addEventListener('click', () => {
             row.remove();
             updateOptionCount();

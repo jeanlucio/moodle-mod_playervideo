@@ -475,7 +475,9 @@ const initSpeedControl = () => {
 };
 
 /**
- * Escapes a string for safe insertion as an HTML attribute value.
+ * Escapes a string for safe insertion as an HTML attribute value or text content. The
+ * textContent/innerHTML round-trip alone only escapes &, < and > — quotes must be escaped
+ * separately or a value placed inside a double- or single-quoted attribute can break out of it.
  *
  * @param {string} text Raw text.
  * @returns {string}
@@ -483,7 +485,7 @@ const initSpeedControl = () => {
 const escapeHtmlAttribute = (text) => {
     const div = document.createElement('div');
     div.textContent = text;
-    return div.innerHTML;
+    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 };
 
 /**

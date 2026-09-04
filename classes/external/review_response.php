@@ -30,6 +30,7 @@ use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
 use mod_playervideo\local\attempt_manager;
+use mod_playervideo\local\group_access;
 use moodle_exception;
 
 /**
@@ -77,6 +78,10 @@ class review_response extends external_api {
         $context = context_module::instance($cm->id);
         self::validate_context($context);
         require_capability('mod/playervideo:reviewresponses', $context);
+
+        if (!group_access::can_access_user($cm, $context, (int) $response->userid)) {
+            throw new moodle_exception('error_studentnotinyourgroup', 'mod_playervideo');
+        }
 
         if ($interaction->type !== 'question') {
             throw new moodle_exception('error_invalidinteractiontype', 'mod_playervideo');

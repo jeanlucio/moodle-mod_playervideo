@@ -66,10 +66,16 @@ final class transcript_service {
         )));
         $polloptionsbyinteraction = self::get_poll_options($pollinteractionids);
 
+        $questionids = array_values(array_filter(array_map(
+            static fn($record) => $record->type === 'question' ? (int) $record->questionid : null,
+            $interactionrecords
+        )));
+        $questionsbyid = question_service::get_questions_for_frontend($questionids, $context);
+
         foreach ($interactionrecords as $record) {
             $question = null;
             if ($record->type === 'question' && $record->questionid !== null) {
-                $question = question_service::get_question_for_frontend((int) $record->questionid, $context);
+                $question = $questionsbyid[(int) $record->questionid] ?? null;
             }
             $blocks[] = [
                 'kind' => 'interaction',

@@ -208,6 +208,20 @@ final class lib_test extends \advanced_testcase {
             'playervideoid' => $id, 'lang' => 'en', 'source' => 'manual', 'content' => 'WEBVTT',
             'timecreated' => $now, 'timemodified' => $now,
         ]);
+        $pollid = $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $id, 'timestamp' => 10, 'type' => 'poll', 'weight' => 0,
+            'questionid' => null, 'notetext' => 'Pick one', 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 1, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('playervideo_poll_options', (object) [
+            'interactionid' => $pollid, 'optiontext' => 'A', 'sortorder' => 0,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('playervideo_disummaries', (object) [
+            'playervideoid' => $id, 'lang' => 'en', 'content' => 'Easy-read summary.',
+            'status' => \mod_playervideo\local\di_summary_service::STATUS_PENDING,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
 
         $result = playervideo_delete_instance($id);
 
@@ -215,10 +229,11 @@ final class lib_test extends \advanced_testcase {
         $this->assertFalse($DB->record_exists('playervideo', ['id' => $id]));
         foreach (
             ['playervideo_interactions', 'playervideo_attempts', 'playervideo_responses',
-                'playervideo_progress', 'playervideo_captions'] as $table
+                'playervideo_progress', 'playervideo_captions', 'playervideo_disummaries'] as $table
         ) {
             $this->assertSame(0, $DB->count_records($table, ['playervideoid' => $id]), "$table not cleared");
         }
+        $this->assertSame(0, $DB->count_records('playervideo_poll_options', ['interactionid' => $pollid]));
     }
 
     /**
@@ -304,6 +319,35 @@ final class lib_test extends \advanced_testcase {
         $grades = grade_get_grades($course->id, 'mod', 'playervideo', $instance->id, $userid);
         $usergrade = $grades->items[0]->grades[$userid];
         $this->assertSame(90.0, (float) $usergrade->grade);
+    }
+
+    /**
+     * Tests that update_grades() with no specific userid (a full recompute — e.g. after the
+     * teacher edits weights) aggregates and writes the grade for every student with a finished
+     * attempt, via the bulk aggregation path.
+     *
+     * @return void
+     */
+    public function test_update_grades_recomputes_every_student_when_no_userid_given(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->create_instance($course->id, ['grademethod' => attempt_manager::GRADE_HIGHEST]);
+
+        $now = time();
+        foreach ([2 => 60.0, 3 => 90.0] as $userid => $grade) {
+            $DB->insert_record('playervideo_attempts', (object) [
+                'playervideoid' => $instance->id, 'userid' => $userid, 'attemptnumber' => 1,
+                'status' => 'finished', 'grade' => $grade, 'hudretrycharged' => 0,
+                'timestart' => $now, 'timefinish' => $now, 'timecreated' => $now, 'timemodified' => $now,
+            ]);
+        }
+
+        playervideo_update_grades($instance);
+
+        $grades = grade_get_grades($course->id, 'mod', 'playervideo', $instance->id, [2, 3]);
+        $this->assertSame(60.0, (float) $grades->items[0]->grades[2]->grade);
+        $this->assertSame(90.0, (float) $grades->items[0]->grades[3]->grade);
     }
 
     /**

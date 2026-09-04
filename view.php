@@ -111,11 +111,13 @@ if (!empty($pollinteractionids)) {
     }
 }
 
+$questionsbyid = question_service::get_questions_for_frontend($questionids, $context);
+
 $interactions = [];
 foreach ($interactionrecords as $record) {
     $question = null;
     if ($record->type === 'question' && $record->questionid !== null) {
-        $question = question_service::get_question_for_frontend((int) $record->questionid, $context);
+        $question = $questionsbyid[(int) $record->questionid] ?? null;
     }
     $interactions[] = [
         'id' => (int) $record->id,

@@ -30,6 +30,7 @@ use core_external\external_function_parameters;
 use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
+use mod_playervideo\local\group_access;
 use mod_playervideo\local\question_service;
 
 /**
@@ -75,6 +76,15 @@ class get_pending_corrections extends external_api {
             ],
             'timecreated ASC'
         );
+
+        $restricteduserids = group_access::restricted_userids($cm, $context);
+        if ($restricteduserids !== null) {
+            $responses = array_filter(
+                $responses,
+                static fn($record): bool => in_array((int) $record->userid, $restricteduserids, true)
+            );
+        }
+
         if (empty($responses)) {
             return ['responses' => []];
         }

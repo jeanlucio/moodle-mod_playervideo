@@ -243,6 +243,22 @@ class question_service {
     }
 
     /**
+     * Returns several questions at once, formatted for the frontend, keyed by id.
+     *
+     * Batch counterpart of {@see get_question_for_frontend()} for callers that build a whole
+     * timeline at once (view.php, transcript_service.php) — avoids one question + one
+     * question_answers query per interaction in a loop.
+     *
+     * @param int[] $questionids Question ids.
+     * @param context $context The context for formatting the HTML text.
+     * @return array<int, array> Question id => the same shape get_question_for_frontend()
+     *      returns; missing ids are simply absent.
+     */
+    public static function get_questions_for_frontend(array $questionids, context $context): array {
+        return self::get_questions_batch($questionids, $context, false);
+    }
+
+    /**
      * Returns the formatted question text for several questions at once, keyed by id.
      *
      * Batch counterpart of get_question_for_frontend() for callers that only need the text
@@ -328,6 +344,97 @@ class question_service {
             'text' => format_text($question->questiontext, $question->questiontextformat, ['context' => $context]),
             'options' => $options,
         ];
+    }
+
+    /**
+     * Returns several questions at once, formatted for the read-only review screen, keyed by id.
+     *
+     * Batch counterpart of {@see get_question_for_review()} for get_attempt_review, which builds
+     * a whole attempt's worth of interactions at once — avoids one question + one
+     * question_answers query per interaction in a loop.
+     *
+     * @param int[] $questionids Question ids.
+     * @param context $context The context for formatting the HTML text.
+     * @return array<int, array> Question id => the same shape get_question_for_review() returns;
+     *      missing ids are simply absent.
+     */
+    public static function get_questions_for_review(array $questionids, context $context): array {
+        return self::get_questions_batch($questionids, $context, true);
+    }
+
+    /**
+     * Shared implementation of {@see get_questions_for_frontend()} and
+     * {@see get_questions_for_review()} — both fetch the same question + question_answers rows
+     * in bulk and differ only in whether the correct answer/feedback is revealed and whether the
+     * options are shuffled (frontend only; review mode keeps DB order, matching the single-question
+     * methods' own behaviour).
+     *
+     * @param int[] $questionids Question ids.
+     * @param context $context The context for formatting the HTML text.
+     * @param bool $revealanswers Whether to include 'correct'/'feedback' per option (review mode).
+     * @return array<int, array> Question id => formatted question.
+     */
+    private static function get_questions_batch(array $questionids, context $context, bool $revealanswers): array {
+        global $DB;
+
+        $questionids = array_values(array_unique(array_map('intval', $questionids)));
+        if (empty($questionids)) {
+            return [];
+        }
+
+        [$insql, $inparams] = $DB->get_in_or_equal($questionids);
+        $questions = $DB->get_records_select(
+            'question',
+            "id $insql",
+            $inparams,
+            '',
+            'id, qtype, questiontext, questiontextformat'
+        );
+        if (empty($questions)) {
+            return [];
+        }
+
+        [$ainsql, $ainparams] = $DB->get_in_or_equal($questionids, SQL_PARAMS_NAMED);
+        $answers = $DB->get_records_select('question_answers', "question $ainsql", $ainparams, 'question ASC, id ASC');
+        $answersbyquestion = [];
+        foreach ($answers as $answer) {
+            $answersbyquestion[(int) $answer->question][] = $answer;
+        }
+
+        $result = [];
+        foreach ($questions as $question) {
+            $options = [];
+            if ($question->qtype === 'multichoice' || $question->qtype === 'truefalse') {
+                $qanswers = $answersbyquestion[(int) $question->id] ?? [];
+                if (!$revealanswers) {
+                    shuffle($qanswers);
+                }
+                foreach ($qanswers as $answer) {
+                    $option = [
+                        'id' => (int) $answer->id,
+                        'text' => format_text($answer->answer, $answer->answerformat, ['context' => $context]),
+                    ];
+                    if ($revealanswers) {
+                        $option['correct'] = (float) $answer->fraction >= 1.0;
+                        $option['feedback'] = format_text(
+                            $answer->feedback,
+                            $answer->feedbackformat,
+                            ['context' => $context]
+                        );
+                    }
+                    $options[] = $option;
+                }
+            }
+
+            $result[(int) $question->id] = [
+                'id' => (int) $question->id,
+                'type' => $question->qtype,
+                'text' => format_text($question->questiontext, $question->questiontextformat, ['context' => $context]),
+                'options' => $options,
+            ];
+        }
+
+        return $result;
     }
 
     /**

@@ -29,6 +29,7 @@ use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
+use mod_playervideo\local\attempt_lock;
 use mod_playervideo\local\hud_service;
 use mod_playervideo\local\question_service;
 use moodle_exception;
@@ -106,89 +107,102 @@ class submit_answer extends external_api {
             throw new moodle_exception('error_interactionnotfound', 'mod_playervideo');
         }
 
-        $alreadyanswered = $DB->record_exists('playervideo_responses', [
-            'interactionid' => $interaction->id,
-            'attemptid' => $attempt->id,
-        ]);
-        if ($alreadyanswered) {
-            throw new moodle_exception('error_interactionalreadyanswered', 'mod_playervideo');
-        }
-
-        $now = time();
-        $response = new stdClass();
-        $response->playervideoid = $attempt->playervideoid;
-        $response->userid = $attempt->userid;
-        $response->attemptid = $attempt->id;
-        $response->interactionid = $interaction->id;
-        $response->questionid = $interaction->questionid;
-        $response->answerid = null;
-        $response->polloptionid = null;
-        $response->responsetext = null;
-        $response->iscorrect = null;
-        $response->hudrewarded = 0;
-        $response->timecreated = $now;
-        $response->timemodified = $now;
-
-        $iscorrect = null;
-
-        if ($interaction->type === 'note') {
-            $response->status = 'viewed';
-        } else if ($interaction->type === 'poll') {
-            $optionbelongstopoll = $DB->record_exists('playervideo_poll_options', [
-                'id' => $params['polloptionid'],
-                'interactionid' => $interaction->id,
-            ]);
-            if ($params['polloptionid'] <= 0 || !$optionbelongstopoll) {
-                throw new moodle_exception('error_invalidpolloption', 'mod_playervideo');
-            }
-            $response->polloptionid = $params['polloptionid'];
-            $response->status = 'voted';
-        } else {
-            $qtype = question_service::get_question_type((int) $interaction->questionid);
-            if ($qtype === null) {
-                throw new moodle_exception('error_questionnotfound', 'mod_playervideo');
-            }
-
-            if ($qtype === 'multichoice' || $qtype === 'truefalse') {
-                $answerbelongstoquestion = $DB->record_exists('question_answers', [
-                    'id' => $params['answerid'],
-                    'question' => $interaction->questionid,
-                ]);
-                if ($params['answerid'] <= 0 || !$answerbelongstoquestion) {
-                    throw new moodle_exception('error_invalidanswer', 'mod_playervideo');
-                }
-                $response->answerid = $params['answerid'];
-                $iscorrect = question_service::is_answer_correct((int) $interaction->questionid, $params['answerid']);
-                $response->iscorrect = $iscorrect ? 1 : 0;
-                $response->status = 'answered';
-            } else {
-                if (trim($params['responsetext']) === '') {
-                    throw new moodle_exception('error_responsetextrequired', 'mod_playervideo');
-                }
-                $response->responsetext = $params['responsetext'];
-                // Not 'pending_review' yet — no AI suggestion has been generated at this point
-                // (see generate_response_correction, Fase 4d). attempt_manager::has_pending_
-                // correction() already treats both statuses as "still needs a teacher decision".
-                $response->status = 'pending_ai';
-            }
-        }
-
         $instance = $DB->get_record('playervideo', ['id' => $attempt->playervideoid], '*', MUST_EXIST);
 
-        if ($iscorrect === true && (int) $instance->hudcorrectitem > 0) {
-            $alreadyrewarded = $DB->record_exists('playervideo_responses', [
+        // The already-answered/already-rewarded checks below and the response insert must run
+        // as one atomic sequence: without this lock, two concurrent requests for the same
+        // attempt+interaction can both pass both checks before either writes, granting the
+        // PlayerHUD item twice for one correct answer (see the security audit, finding #3).
+        $lock = attempt_lock::acquire('answer_' . $attempt->id . '_' . $interaction->id);
+        try {
+            $alreadyanswered = $DB->record_exists('playervideo_responses', [
                 'interactionid' => $interaction->id,
-                'userid' => $attempt->userid,
-                'hudrewarded' => 1,
+                'attemptid' => $attempt->id,
             ]);
-            if (!$alreadyrewarded) {
+            if ($alreadyanswered) {
+                throw new moodle_exception('error_interactionalreadyanswered', 'mod_playervideo');
+            }
+
+            $now = time();
+            $response = new stdClass();
+            $response->playervideoid = $attempt->playervideoid;
+            $response->userid = $attempt->userid;
+            $response->attemptid = $attempt->id;
+            $response->interactionid = $interaction->id;
+            $response->questionid = $interaction->questionid;
+            $response->answerid = null;
+            $response->polloptionid = null;
+            $response->responsetext = null;
+            $response->iscorrect = null;
+            $response->hudrewarded = 0;
+            $response->timecreated = $now;
+            $response->timemodified = $now;
+
+            $iscorrect = null;
+
+            if ($interaction->type === 'note') {
+                $response->status = 'viewed';
+            } else if ($interaction->type === 'poll') {
+                $optionbelongstopoll = $DB->record_exists('playervideo_poll_options', [
+                    'id' => $params['polloptionid'],
+                    'interactionid' => $interaction->id,
+                ]);
+                if ($params['polloptionid'] <= 0 || !$optionbelongstopoll) {
+                    throw new moodle_exception('error_invalidpolloption', 'mod_playervideo');
+                }
+                $response->polloptionid = $params['polloptionid'];
+                $response->status = 'voted';
+            } else {
+                $qtype = question_service::get_question_type((int) $interaction->questionid);
+                if ($qtype === null) {
+                    throw new moodle_exception('error_questionnotfound', 'mod_playervideo');
+                }
+
+                if ($qtype === 'multichoice' || $qtype === 'truefalse') {
+                    $answerbelongstoquestion = $DB->record_exists('question_answers', [
+                        'id' => $params['answerid'],
+                        'question' => $interaction->questionid,
+                    ]);
+                    if ($params['answerid'] <= 0 || !$answerbelongstoquestion) {
+                        throw new moodle_exception('error_invalidanswer', 'mod_playervideo');
+                    }
+                    $response->answerid = $params['answerid'];
+                    $iscorrect = question_service::is_answer_correct((int) $interaction->questionid, $params['answerid']);
+                    $response->iscorrect = $iscorrect ? 1 : 0;
+                    $response->status = 'answered';
+                } else {
+                    if (trim($params['responsetext']) === '') {
+                        throw new moodle_exception('error_responsetextrequired', 'mod_playervideo');
+                    }
+                    $response->responsetext = $params['responsetext'];
+                    // Not 'pending_review' yet — no AI suggestion has been generated at this
+                    // point (see generate_response_correction, Fase 4d). attempt_manager::
+                    // has_pending_correction() already treats both statuses as "still needs a
+                    // teacher decision".
+                    $response->status = 'pending_ai';
+                }
+            }
+
+            $shouldreward = false;
+            if ($iscorrect === true && (int) $instance->hudcorrectitem > 0) {
+                $alreadyrewarded = $DB->record_exists('playervideo_responses', [
+                    'interactionid' => $interaction->id,
+                    'userid' => $attempt->userid,
+                    'hudrewarded' => 1,
+                ]);
+                $shouldreward = !$alreadyrewarded;
+                $response->hudrewarded = $shouldreward ? 1 : 0;
+            }
+
+            $DB->insert_record('playervideo_responses', $response);
+
+            if ($shouldreward) {
                 $blockinstanceid = hud_service::resolve_block_instance_id($instance);
                 hud_service::grant_items($blockinstanceid, $attempt->userid, (int) $instance->hudcorrectitem, 1);
-                $response->hudrewarded = 1;
             }
+        } finally {
+            $lock->release();
         }
-
-        $DB->insert_record('playervideo_responses', $response);
 
         $course = get_course($cm->course);
         $completion = new \completion_info($course);

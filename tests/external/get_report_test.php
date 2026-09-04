@@ -187,4 +187,54 @@ final class get_report_test extends \advanced_testcase {
         $this->assertSame([], $result['data']['byquestion']);
         $this->assertSame([], $result['data']['bystudent']);
     }
+
+    /**
+     * Regression test for the separate-groups leak (security audit finding #4): a non-editing
+     * teacher restricted to one group, with no moodle/site:accessallgroups, must not see a
+     * student from a different group in the per-student aggregate — even though
+     * mod/playervideo:viewreports itself is not group-scoped.
+     *
+     * @return void
+     */
+    public function test_bystudent_excludes_students_from_a_different_separate_group(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course(['groupmode' => SEPARATEGROUPS, 'groupmodeforce' => 1]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
+        $instance = $generator->create_instance(['course' => $course->id, 'groupmode' => SEPARATEGROUPS]);
+
+        $groupone = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $grouptwo = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+
+        $studentingroupone = $this->getDataGenerator()->create_user(['firstname' => 'Ana', 'lastname' => 'GroupOne']);
+        $this->getDataGenerator()->enrol_user($studentingroupone->id, $course->id, 'student');
+        $this->getDataGenerator()->create_group_member(['groupid' => $groupone->id, 'userid' => $studentingroupone->id]);
+
+        $studeningrouptwo = $this->getDataGenerator()->create_user(['firstname' => 'Bruno', 'lastname' => 'GroupTwo']);
+        $this->getDataGenerator()->enrol_user($studeningrouptwo->id, $course->id, 'student');
+        $this->getDataGenerator()->create_group_member(['groupid' => $grouptwo->id, 'userid' => $studeningrouptwo->id]);
+
+        $teacher = $this->getDataGenerator()->create_user();
+        // Non-editing 'teacher' archetype: has mod/playervideo:viewreports by default, but not
+        // moodle/site:accessallgroups — exactly the gap the audit's PoC exercises.
+        $this->getDataGenerator()->enrol_user($teacher->id, $course->id, 'teacher');
+        $this->getDataGenerator()->create_group_member(['groupid' => $groupone->id, 'userid' => $teacher->id]);
+
+        $now = time();
+        foreach ([$studentingroupone, $studeningrouptwo] as $student) {
+            $DB->insert_record('playervideo_attempts', (object) [
+                'playervideoid' => $instance->id, 'userid' => $student->id, 'attemptnumber' => 1,
+                'status' => 'finished', 'grade' => 100.0, 'hudretrycharged' => 0,
+                'timestart' => $now, 'timefinish' => $now, 'timecreated' => $now, 'timemodified' => $now,
+            ]);
+        }
+
+        $this->setUser($teacher);
+        $result = $this->call(['playervideoid' => $instance->id]);
+
+        $this->assertFalse($result['error']);
+        $seenuserids = array_column($result['data']['bystudent'], 'userid');
+        $this->assertContains((int) $studentingroupone->id, $seenuserids);
+        $this->assertNotContains((int) $studeningrouptwo->id, $seenuserids);
+    }
 }

@@ -26,6 +26,7 @@
 namespace mod_playervideo\external;
 
 use core_external\external_api;
+use moodle_database;
 
 /**
  * Tests for the mod_playervideo_submit_answer web service.
@@ -45,6 +46,9 @@ final class submit_answer_test extends \advanced_testcase {
     /** @var int Open attempt id for $this->student on $this->instance. */
     private int $attemptid;
 
+    /** @var ?moodle_database Second, independent connection used to simulate a concurrent request. */
+    private ?moodle_database $seconddb = null;
+
     #[\Override]
     protected function setUp(): void {
         parent::setUp();
@@ -59,6 +63,15 @@ final class submit_answer_test extends \advanced_testcase {
         $this->setUser($this->student);
         $started = $this->call_start_attempt();
         $this->attemptid = $started['data']['attemptid'];
+    }
+
+    #[\Override]
+    protected function tearDown(): void {
+        if ($this->seconddb !== null) {
+            $this->seconddb->dispose();
+            $this->seconddb = null;
+        }
+        parent::tearDown();
     }
 
     /**
@@ -311,5 +324,66 @@ final class submit_answer_test extends \advanced_testcase {
 
         $this->assertTrue($result['error']);
         $this->assertSame('error_attemptnotinprogress', $result['exception']->errorcode);
+    }
+
+    /**
+     * Regression test for the PlayerHUD double-reward race (security audit finding #3): a
+     * second, genuinely concurrent request for the same attempt+interaction must be refused
+     * outright by the attempt_lock, instead of being allowed to re-run the already-answered/
+     * already-rewarded checks and grant the item a second time. Simulates concurrency with a
+     * second, independent database connection holding the same lock key submit_answer uses.
+     *
+     * @return void
+     */
+    public function test_concurrent_submission_for_the_same_interaction_is_locked_out(): void {
+        $interactionid = $this->make_note_interaction();
+        $lockkey = 'answer_' . $this->attemptid . '_' . $interactionid;
+        $otherlock = $this->acquire_on_second_connection($lockkey);
+
+        try {
+            $result = $this->call(['interactionid' => $interactionid]);
+        } finally {
+            $otherlock->release();
+        }
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_attemptlockbusy', $result['exception']->errorcode);
+    }
+
+    /**
+     * Acquires the mod_playervideo lock factory's lock for the given resource key from a
+     * second, independently-connected database session, so contention against it reflects a
+     * genuinely different session rather than this test's own (self-reentrant) connection.
+     * Advisory locks are reentrant per connection, so a second lock_factory instance on the
+     * same connection would never actually block.
+     *
+     * @param string $resourcekey The resource key to lock.
+     * @return \core\lock\lock The lock, held on the second connection; the caller must release it.
+     */
+    private function acquire_on_second_connection(string $resourcekey): \core\lock\lock {
+        global $DB;
+
+        $cfg = $DB->export_dbconfig();
+        if (!isset($cfg->dboptions)) {
+            $cfg->dboptions = [];
+        }
+
+        $this->seconddb = moodle_database::get_driver_instance($cfg->dbtype, $cfg->dblibrary);
+        $this->seconddb->connect($cfg->dbhost, $cfg->dbuser, $cfg->dbpass, $cfg->dbname, $cfg->prefix, $cfg->dboptions);
+
+        $original = $GLOBALS['DB'];
+        $GLOBALS['DB'] = $this->seconddb;
+        try {
+            $factory = \core\lock\lock_config::get_lock_factory('mod_playervideo');
+            $lock = $factory->get_lock($resourcekey, 1);
+        } finally {
+            $GLOBALS['DB'] = $original;
+        }
+
+        if (!$lock) {
+            $this->fail('Precondition: the second connection must be able to acquire the lock.');
+        }
+
+        return $lock;
     }
 }

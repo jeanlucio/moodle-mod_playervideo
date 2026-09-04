@@ -31,6 +31,7 @@ use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
 use mod_playervideo\local\attempt_manager;
+use mod_playervideo\local\group_access;
 use mod_playervideo\local\question_service;
 
 /**
@@ -173,6 +174,15 @@ class get_report extends external_api {
             0,
             'u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic, u.middlename, u.alternatename'
         );
+
+        $restricteduserids = group_access::restricted_userids($cm, $context);
+        if ($restricteduserids !== null) {
+            $students = array_filter(
+                $students,
+                static fn($user): bool => in_array((int) $user->id, $restricteduserids, true)
+            );
+        }
+
         if (empty($students)) {
             return [];
         }

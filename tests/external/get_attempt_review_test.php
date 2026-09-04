@@ -184,6 +184,37 @@ final class get_attempt_review_test extends \advanced_testcase {
     }
 
     /**
+     * Tests that a note's HTML is sanitized through format_text(), matching the live playback
+     * path (view.php) and the transcript path (transcript_service), instead of being returned
+     * raw. A raw PARAM_RAW passthrough here is a stored XSS: save_interaction accepts arbitrary
+     * HTML in notetext, and the review template renders it with triple-mustache.
+     *
+     * @return void
+     */
+    public function test_note_html_is_sanitized_by_format_text(): void {
+        global $DB;
+
+        $now = time();
+        $noteid = $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $this->instance->id, 'timestamp' => 5, 'type' => 'note', 'weight' => 1,
+            'questionid' => null, 'notetext' => '<img src=x onerror="alert(1)">Hello',
+            'notetextformat' => FORMAT_HTML, 'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $_POST['sesskey'] = sesskey();
+        external_api::call_external_function('mod_playervideo_submit_answer', [
+            'attemptid' => $this->attemptid, 'interactionid' => $noteid, 'answerid' => 0, 'responsetext' => '',
+        ]);
+
+        $result = $this->call();
+
+        $this->assertFalse($result['error']);
+        $notetext = $result['data']['interactions'][0]['notetext'];
+        $this->assertStringNotContainsString('onerror', $notetext);
+        $this->assertStringContainsString('Hello', $notetext);
+    }
+
+    /**
      * Tests that another student cannot review this attempt without the reviewresponses
      * capability.
      *

@@ -258,4 +258,70 @@ final class review_response_test extends \advanced_testcase {
         $this->assertTrue($result['error']);
         $this->assertSame('nopermissions', $result['exception']->errorcode);
     }
+
+    /**
+     * Regression test for the separate-groups leak (security audit finding #4): a non-editing
+     * teacher restricted to one group, with no moodle/site:accessallgroups, must not be able to
+     * grade a response from a student in a different group, even with a responseid they already
+     * know (e.g. from another channel) — mod/playervideo:reviewresponses alone is not enough.
+     *
+     * @return void
+     */
+    public function test_rejects_grading_a_student_from_a_different_separate_group(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course(['groupmode' => SEPARATEGROUPS, 'groupmodeforce' => 1]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
+        $instance = $generator->create_instance(['course' => $course->id, 'groupmode' => SEPARATEGROUPS]);
+        $cm = get_coursemodule_from_instance('playervideo', $instance->id);
+        $context = \context_module::instance($cm->id);
+
+        $groupone = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $grouptwo = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+
+        $studentingrouptwo = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($studentingrouptwo->id, $course->id, 'student');
+        $this->getDataGenerator()->create_group_member(['groupid' => $grouptwo->id, 'userid' => $studentingrouptwo->id]);
+
+        $teacher = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($teacher->id, $course->id, 'teacher');
+        $this->getDataGenerator()->create_group_member(['groupid' => $groupone->id, 'userid' => $teacher->id]);
+
+        $categoryid = question_service::get_or_create_category($context);
+        $formdata = (object) [
+            'name' => 'Explain photosynthesis',
+            'questiontext' => ['text' => 'Explain photosynthesis.', 'format' => FORMAT_HTML],
+            'generalfeedback' => ['text' => '', 'format' => FORMAT_HTML],
+            'defaultmark' => 1,
+            'penalty' => 0,
+        ];
+        foreach (get_object_vars(question_service::build_essay_formdata()) as $field => $value) {
+            $formdata->$field = $value;
+        }
+        $questionid = question_service::create_question('essay', $categoryid, $context->id, $formdata);
+
+        $now = time();
+        $interactionid = $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $instance->id, 'timestamp' => 5.0, 'type' => 'question', 'weight' => 1.0,
+            'questionid' => $questionid, 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $attemptid = $DB->insert_record('playervideo_attempts', (object) [
+            'playervideoid' => $instance->id, 'userid' => $studentingrouptwo->id, 'attemptnumber' => 1,
+            'status' => 'pendingcorrection', 'grade' => null, 'hudretrycharged' => 0,
+            'timestart' => $now, 'timefinish' => $now, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $responseid = $DB->insert_record('playervideo_responses', (object) [
+            'playervideoid' => $instance->id, 'userid' => $studentingrouptwo->id, 'attemptid' => $attemptid,
+            'interactionid' => $interactionid, 'questionid' => $questionid, 'responsetext' => 'My answer',
+            'status' => 'pending_review', 'hudrewarded' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $this->setUser($teacher);
+        $result = $this->call(['responseid' => $responseid, 'teachergrade' => 1.0]);
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_studentnotinyourgroup', $result['exception']->errorcode);
+        $this->assertSame('pending_review', $DB->get_field('playervideo_responses', 'status', ['id' => $responseid]));
+    }
 }

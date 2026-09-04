@@ -193,9 +193,14 @@ function playervideo_update_grades(stdClass $instance, int $userid = 0): void {
     }
 
     $grademethod = (int) ($instance->grademethod ?? attempt_manager::GRADE_HIGHEST);
+    $finalgradesbyuser = attempt_manager::aggregate_final_grades_bulk(
+        $instance->id,
+        array_map('intval', $userids),
+        $grademethod
+    );
+
     $grades = [];
-    foreach ($userids as $uid) {
-        $finalgrade = attempt_manager::aggregate_final_grade($instance->id, (int) $uid, $grademethod);
+    foreach ($finalgradesbyuser as $uid => $finalgrade) {
         if ($finalgrade === null) {
             continue;
         }
@@ -323,9 +328,17 @@ function playervideo_delete_instance(int $id): bool {
 
     $DB->delete_records('playervideo_responses', ['playervideoid' => $id]);
     $DB->delete_records('playervideo_attempts', ['playervideoid' => $id]);
+    // Must run before the parent interactions are deleted below — it selects its own rows by
+    // interactionid, not playervideoid.
+    $DB->delete_records_select(
+        'playervideo_poll_options',
+        'interactionid IN (SELECT id FROM {playervideo_interactions} WHERE playervideoid = :playervideoid)',
+        ['playervideoid' => $id]
+    );
     $DB->delete_records('playervideo_interactions', ['playervideoid' => $id]);
     $DB->delete_records('playervideo_captions', ['playervideoid' => $id]);
     $DB->delete_records('playervideo_progress', ['playervideoid' => $id]);
+    $DB->delete_records('playervideo_disummaries', ['playervideoid' => $id]);
     $DB->delete_records('playervideo', ['id' => $id]);
 
     return true;

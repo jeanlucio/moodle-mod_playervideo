@@ -30,6 +30,7 @@ use core_external\external_function_parameters;
 use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
+use mod_playervideo\local\attempt_lock;
 use mod_playervideo\local\attempt_manager;
 use mod_playervideo\local\hud_service;
 use moodle_exception;
@@ -70,47 +71,57 @@ class start_attempt extends external_api {
         $instance = $DB->get_record('playervideo', ['id' => $params['playervideoid']], '*', MUST_EXIST);
         $userid = (int) $USER->id;
 
-        $attempt = attempt_manager::get_open_attempt($instance->id, $userid);
+        // The can_start_new_attempt() check and the attempt insert below must run as one atomic
+        // sequence: without this lock, two concurrent requests can both see attemptcount <
+        // maxattempts before either writes, letting the student open more attempts than the
+        // teacher configured (see the security audit, finding #3).
+        $lock = attempt_lock::acquire('start_' . $instance->id . '_' . $userid);
+        try {
+            $attempt = attempt_manager::get_open_attempt($instance->id, $userid);
 
-        // The attempt_manager::get_open_attempt() lookup above also returns a pendingcorrection
-        // attempt, but there is nothing left to resume there — the video was already watched,
-        // only the grade is withheld. Treat it like no open attempt: a fresh one may start if
-        // can_start_new_attempt() still allows it (a pendingcorrection attempt already counts
-        // toward that total, so this never lets a student exceed maxattempts).
-        if ($attempt !== null && $attempt->status === 'pendingcorrection') {
-            $attempt = null;
-        }
-
-        if ($attempt === null) {
-            if (!attempt_manager::can_start_new_attempt($instance->id, $userid, (int) $instance->maxattempts)) {
-                throw new moodle_exception('error_noattemptsleft', 'mod_playervideo');
+            // The attempt_manager::get_open_attempt() lookup above also returns a
+            // pendingcorrection attempt, but there is nothing left to resume there — the video
+            // was already watched, only the grade is withheld. Treat it like no open attempt: a
+            // fresh one may start if can_start_new_attempt() still allows it (a pendingcorrection
+            // attempt already counts toward that total, so this never lets a student exceed
+            // maxattempts).
+            if ($attempt !== null && $attempt->status === 'pendingcorrection') {
+                $attempt = null;
             }
 
-            $attemptnumber = 1 + $DB->count_records('playervideo_attempts', [
-                'playervideoid' => $instance->id,
-                'userid' => $userid,
-            ]);
+            if ($attempt === null) {
+                if (!attempt_manager::can_start_new_attempt($instance->id, $userid, (int) $instance->maxattempts)) {
+                    throw new moodle_exception('error_noattemptsleft', 'mod_playervideo');
+                }
 
-            $charged = false;
-            if ($attemptnumber > 1 && (int) $instance->hudretrycostitem > 0 && (int) $instance->hudretrycostqty > 0) {
-                $blockinstanceid = hud_service::resolve_block_instance_id($instance);
-                $charged = hud_service::consume_items(
-                    $blockinstanceid,
-                    $userid,
-                    (int) $instance->hudretrycostitem,
-                    (int) $instance->hudretrycostqty
-                );
-                if (!$charged) {
-                    throw new moodle_exception('error_insufficienthuditems', 'mod_playervideo');
+                $attemptnumber = 1 + $DB->count_records('playervideo_attempts', [
+                    'playervideoid' => $instance->id,
+                    'userid' => $userid,
+                ]);
+
+                $charged = false;
+                if ($attemptnumber > 1 && (int) $instance->hudretrycostitem > 0 && (int) $instance->hudretrycostqty > 0) {
+                    $blockinstanceid = hud_service::resolve_block_instance_id($instance);
+                    $charged = hud_service::consume_items(
+                        $blockinstanceid,
+                        $userid,
+                        (int) $instance->hudretrycostitem,
+                        (int) $instance->hudretrycostqty
+                    );
+                    if (!$charged) {
+                        throw new moodle_exception('error_insufficienthuditems', 'mod_playervideo');
+                    }
+                }
+
+                $attempt = attempt_manager::start_attempt($instance->id, $userid);
+
+                if ($charged) {
+                    $attempt->hudretrycharged = 1;
+                    $DB->set_field('playervideo_attempts', 'hudretrycharged', 1, ['id' => $attempt->id]);
                 }
             }
-
-            $attempt = attempt_manager::start_attempt($instance->id, $userid);
-
-            if ($charged) {
-                $attempt->hudretrycharged = 1;
-                $DB->set_field('playervideo_attempts', 'hudretrycharged', 1, ['id' => $attempt->id]);
-            }
+        } finally {
+            $lock->release();
         }
 
         $treatedinteractionids = $DB->get_fieldset_select(
