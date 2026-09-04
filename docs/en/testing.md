@@ -56,13 +56,14 @@ and cross-instance isolation. Every CI push runs against the full matrix (Moodle
 | `lib_test.php` | 15 |
 | `privacy/provider_test.php` | 14 |
 | `cross_instance_security_test.php` | 6 |
-| `backup_restore_test.php` | 5 |
+| `backup_restore_test.php` | 6 |
+| `mod_form_test.php` | 6 |
 | `completion/custom_completion_test.php` | 4 |
 | `uninstall_test.php` | 2 |
 | `output/view_render_test.php` | 1 |
-| **Subtotal** | **47** |
+| **Subtotal** | **54** |
 
-| **Grand Total** | **237** |
+| **Grand Total** | **244** |
 
 ```bash
 vendor/bin/phpunit --bootstrap lib/phpunit/bootstrap.php mod/playervideo
@@ -105,7 +106,32 @@ vendor/bin/phpunit --bootstrap lib/phpunit/bootstrap.php mod/playervideo
 | `external\generate_question_ai` | 52% |
 | `external\generate_response_correction` | 49% |
 | `local\ai_service` | 32% |
-| **Overall** | **82%** |
+| **Overall** | **81%** |
+
+**Legacy (non-namespaced) files, measured separately:** `mod_form.php` and the two
+`backup/moodle2/*_stepslib.php` classes are never autoloaded under the `mod_playervideo\`
+namespace, so the table above — scoped to `classes/` — never sees them. Measuring the whole
+plugin tree instead (`moodle-coverage mod/playervideo --filter .`) surfaces them on their own:
+
+| File / class | Line coverage |
+|--------------|:-------------:|
+| `backup_playervideo_activity_structure_step` | 100% |
+| `restore_playervideo_activity_structure_step` | 90% |
+| `mod_form.php` (`mod_playervideo_mod_form`) | 62% |
+
+The two Fase 9 backup/restore fixes (`videofile`/`posterimage` annotation) are fully exercised
+by `backup_restore_test.php`'s real `backup_and_restore_into_new_course()` round trip — the
+backup step's own single method is 100% covered, and the restore step's residual 10% gap
+predates Fase 9 (an unrelated branch, not the file handling added this phase). `mod_form.php`
+had a real, closeable gap found by this same sweep: `data_preprocessing()` (the method that
+fixed the `videofile`/`posterimage` silent-data-loss bug, see the features page) started at
+**0% method coverage** — proven correct only by live Playwright validation, never by a direct
+unit test. Closed by adding two tests exercising it directly (an existing instance with both
+files preloads two draft areas; a brand new instance is a no-op), moving the method to 100%
+line coverage. The remaining gap in `mod_form.php` (`definition()`,
+`add_completion_rules()`, `completion_rule_enabled()`, `add_stale_hud_item_option()`) predates
+Fase 9 as well — none of those methods had a dedicated unit test before this sweep either, a
+pre-existing blind spot across the whole file, not something these phases introduced.
 
 > The AI-facing classes (`ai_service`, `generate_question_ai`, `generate_questions_batch`,
 > `generate_response_correction`, `generate_di_summary`) show the lowest PHPUnit line coverage

@@ -182,4 +182,66 @@ final class mod_form_test extends \advanced_testcase {
 
         $this->assertArrayHasKey('posterdescription', $errors);
     }
+
+    /**
+     * Editing an existing instance that already has a stored videofile/posterimage preloads
+     * both into fresh draft areas, so their filepickers show the file instead of rendering
+     * empty — the exact silent-data-loss gap this method was added to close (see its own
+     * docblock).
+     *
+     * @return void
+     */
+    public function test_data_preprocessing_preloads_existing_videofile_and_posterimage(): void {
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
+        $instance = $generator->create_instance(['course' => $this->course->id, 'videotype' => 'html5']);
+        $cm = get_coursemodule_from_instance('playervideo', $instance->id);
+        $context = \context_module::instance($cm->id);
+
+        $fs = get_file_storage();
+        foreach (['videofile', 'posterimage'] as $filearea) {
+            $fs->create_file_from_string([
+                'contextid' => $context->id,
+                'component' => 'mod_playervideo',
+                'filearea' => $filearea,
+                'itemid' => 0,
+                'filepath' => '/',
+                'filename' => "$filearea.bin",
+            ], 'fake-bytes');
+        }
+
+        global $PAGE;
+        $PAGE->set_course($this->course);
+        $data = (object) ['instance' => $instance->id, 'id' => $cm->id, 'course' => $this->course->id];
+        $form = new \mod_playervideo_mod_form($data, 0, $cm, $this->course);
+
+        $defaultvalues = [];
+        $form->data_preprocessing($defaultvalues);
+
+        foreach (['videofile', 'posterimage'] as $filearea) {
+            $this->assertArrayHasKey($filearea, $defaultvalues);
+            $this->assertNotEmpty($defaultvalues[$filearea]);
+            $info = file_get_draft_area_info((int) $defaultvalues[$filearea]);
+            $this->assertSame(1, $info['filecount']);
+        }
+    }
+
+    /**
+     * Adding a brand new instance (no course module yet) is a no-op — there is nothing to
+     * preload, and the method must not try to prepare a draft area against a non-existent
+     * file area.
+     *
+     * @return void
+     */
+    public function test_data_preprocessing_is_noop_when_adding_a_new_instance(): void {
+        global $PAGE;
+        $PAGE->set_course($this->course);
+
+        $data = (object) ['instance' => 0, 'id' => 0, 'course' => $this->course->id, 'section' => 0];
+        $form = new \mod_playervideo_mod_form($data, 0, null, $this->course);
+
+        $defaultvalues = [];
+        $form->data_preprocessing($defaultvalues);
+
+        $this->assertSame([], $defaultvalues);
+    }
 }

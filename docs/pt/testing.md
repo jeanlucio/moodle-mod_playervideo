@@ -57,13 +57,14 @@ validação ao vivo de ponta a ponta contra provedores de IA reais (Gemini/Groq/
 | `lib_test.php` | 15 |
 | `privacy/provider_test.php` | 14 |
 | `cross_instance_security_test.php` | 6 |
-| `backup_restore_test.php` | 5 |
+| `backup_restore_test.php` | 6 |
+| `mod_form_test.php` | 6 |
 | `completion/custom_completion_test.php` | 4 |
 | `uninstall_test.php` | 2 |
 | `output/view_render_test.php` | 1 |
-| **Subtotal** | **47** |
+| **Subtotal** | **54** |
 
-| **Total Geral** | **237** |
+| **Total Geral** | **244** |
 
 ```bash
 vendor/bin/phpunit --bootstrap lib/phpunit/bootstrap.php mod/playervideo
@@ -106,7 +107,34 @@ vendor/bin/phpunit --bootstrap lib/phpunit/bootstrap.php mod/playervideo
 | `external\generate_question_ai` | 52% |
 | `external\generate_response_correction` | 49% |
 | `local\ai_service` | 32% |
-| **Geral** | **82%** |
+| **Geral** | **81%** |
+
+**Arquivos legados (sem namespace), medidos à parte:** `mod_form.php` e as duas classes de
+`backup/moodle2/*_stepslib.php` nunca são autoloaded sob o namespace `mod_playervideo\`, então a
+tabela acima — restrita a `classes/` — nunca os enxerga. Medindo a árvore inteira do plugin
+(`moodle-coverage mod/playervideo --filter .`), eles aparecem sozinhos:
+
+| Arquivo / classe | Cobertura de linhas |
+|-------------------|:--------------------:|
+| `backup_playervideo_activity_structure_step` | 100% |
+| `restore_playervideo_activity_structure_step` | 90% |
+| `mod_form.php` (`mod_playervideo_mod_form`) | 62% |
+
+Os dois fixes de backup/restore da Fase 9 (anotação de `videofile`/`posterimage`) são
+inteiramente exercitados pelo round trip real de `backup_and_restore_into_new_course()` do
+`backup_restore_test.php` — o único método da etapa de backup está 100% coberto, e o gap
+residual de 10% da etapa de restore é anterior à Fase 9 (um ramo não relacionado, não o
+tratamento de arquivo adicionado nesta fase). `mod_form.php` tinha uma lacuna real e fechável,
+achada por essa mesma varredura: `data_preprocessing()` (o método que corrigiu o bug de perda
+silenciosa de dado do `videofile`/`posterimage`, ver a página de funcionalidades) começou com
+**0% de cobertura de método** — provado correto só por validação ao vivo via Playwright, nunca
+por um teste unitário direto. Fechado adicionando dois testes que o exercitam diretamente (uma
+instância existente com os dois arquivos pré-carrega duas áreas de rascunho; uma instância nova
+é um no-op), levando o método a 100% de cobertura de linhas. O gap restante em `mod_form.php`
+(`definition()`, `add_completion_rules()`, `completion_rule_enabled()`,
+`add_stale_hud_item_option()`) também é anterior à Fase 9 — nenhum desses métodos tinha teste
+unitário dedicado antes desta varredura, um ponto cego pré-existente no arquivo inteiro, não algo
+que estas fases introduziram.
 
 > As classes voltadas pra IA (`ai_service`, `generate_question_ai`, `generate_questions_batch`,
 > `generate_response_correction`, `generate_di_summary`) mostram a menor cobertura de linhas
