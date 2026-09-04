@@ -25,6 +25,10 @@
 * ⏩ **Controle de Velocidade de Reprodução:** de 0.5x a 2x, nas três fontes de vídeo, sem nunca
   distorcer o registro de trechos assistidos do anti-avanço — o progresso é sempre medido em
   tempo real de vídeo, nunca em tempo de relógio.
+* 🔍 **Painel de Transcrição Pesquisável:** pra uma atividade com legenda escrita manualmente,
+  abre um painel lateral listando cada trecho com seu horário; digitar filtra e realça os
+  resultados em tempo real, e clicar num trecho leva o vídeo até lá — respeitando a mesma regra
+  de anti-avanço da própria timeline.
 * 🔁 **Múltiplas Tentativas e Agregação de Nota:** Uma atividade pode permitir um número fixo de
   tentativas ou nenhum limite, agregando a nota final pela maior, média, primeira ou última
   tentativa.

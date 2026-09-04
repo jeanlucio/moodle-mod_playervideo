@@ -25,6 +25,10 @@
 * ⏩ **Playback Speed Control:** 0.5x to 2x, on all three video sources, without ever throwing
   off the anti-skip watched-segment tracking — progress is always measured in actual video time,
   not wall-clock time.
+* 🔍 **Searchable Transcript Panel:** For an activity with a manually authored caption, open a
+  side panel listing every line with its timestamp; typing filters and highlights matches in
+  real time, and clicking a line jumps the video there — respecting the exact same anti-skip
+  rule as the timeline itself.
 * 🔁 **Multiple Attempts & Grade Aggregation:** An activity can allow a fixed number of attempts
   or none at all, aggregating the final grade by highest, average, first or last attempt.
 * ⏳ **Grade Withheld Until Every Open Question Is Graded:** An attempt with a pending essay

@@ -128,7 +128,21 @@
                             <option value="">{{#str}}subtitlesoff, mod_playervideo{{/str}}</option>
                         </select>
                     </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="playervideo-transcript-toggle"
+                        aria-expanded="false" aria-controls="playervideo-transcript-panel" hidden>
+                        {{#str}}transcriptpanel, mod_playervideo{{/str}}
+                    </button>
                 </div>
+            </div>
+        </div>
+        <div class="playervideo-transcript-panel card mb-3" id="playervideo-transcript-panel" hidden>
+            <div class="card-body">
+                <label class="visually-hidden" for="playervideo-transcript-search">
+                    {{#str}}searchtranscript, mod_playervideo{{/str}}
+                </label>
+                <input type="search" class="form-control form-control-sm mb-2" id="playervideo-transcript-search"
+                    placeholder="{{#str}}searchtranscript, mod_playervideo{{/str}}">
+                <div id="playervideo-transcript-list" class="playervideo-transcript-list"></div>
             </div>
         </div>
         <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="playervideo-finish-btn">

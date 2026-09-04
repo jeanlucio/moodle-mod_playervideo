@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_playervideo';
-$plugin->version   = 2026090401;        // The current plugin version (Date: YYYYMMDDXX).
+$plugin->version   = 2026090402;        // The current plugin version (Date: YYYYMMDDXX).
 $plugin->requires  = 2024100700;        // Requires: Moodle 4.5+.
 $plugin->supported = [405, 502];
 $plugin->maturity  = MATURITY_ALPHA;

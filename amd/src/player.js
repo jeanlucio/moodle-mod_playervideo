@@ -289,6 +289,11 @@ const setCaptionSelection = (value) => {
         const lang = value.slice('manual:'.length);
         activeManualCaption = manualCaptions.find((caption) => caption.lang === lang) ?? null;
     }
+
+    // The transcript panel always mirrors whichever caption is actually selected, so a search
+    // already typed never silently keeps showing stale lines from a caption the student just
+    // switched away from.
+    refreshTranscriptPanel();
 };
 
 /**
@@ -326,6 +331,132 @@ const loadCaptionOptions = async() => {
     select.value = '';
 
     select.addEventListener('change', () => setCaptionSelection(select.value));
+};
+
+/**
+ * Returns the cues currently backing the transcript panel: whichever manual caption is
+ * actively selected, or the first available one if none is (captions off, or a native track
+ * selected) — the panel always has something to show as long as at least one manual caption
+ * exists, mirroring blind_mode_service::pick_caption_cues()'s own graceful fallback.
+ *
+ * @returns {Array} Cues, or an empty array if no manual caption exists at all.
+ */
+const getTranscriptCues = () => (activeManualCaption ?? manualCaptions[0])?.cues ?? [];
+
+/**
+ * Wraps every case-insensitive match of query inside text with <mark>, HTML-escaping
+ * everything else first — text is always an already-known cue from this plugin's own captions,
+ * never arbitrary third-party markup.
+ *
+ * @param {string} text Cue text.
+ * @param {string} query Search query, already trimmed.
+ * @returns {string} HTML-safe markup with matches wrapped in <mark>.
+ */
+const highlightMatch = (text, query) => {
+    const escaped = escapeHtmlAttribute(text);
+    if (query === '') {
+        return escaped;
+    }
+    const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig');
+    return escaped.replace(pattern, (match) => `<mark>${match}</mark>`);
+};
+
+/**
+ * Renders the transcript panel's cue list, filtered by the given search query — a cue whose
+ * text does not contain the query (case-insensitive) is omitted outright, not just dimmed.
+ *
+ * @param {string} query Search query, as typed (not yet trimmed).
+ * @returns {Promise<void>}
+ */
+const renderTranscriptList = async(query) => {
+    const container = document.getElementById('playervideo-transcript-list');
+    if (!container) {
+        return;
+    }
+    const trimmed = query.trim();
+    const cues = getTranscriptCues().filter(
+        (cue) => trimmed === '' || cue.text.toLowerCase().includes(trimmed.toLowerCase())
+    );
+
+    if (cues.length === 0) {
+        container.textContent = await getString('notranscriptmatches', 'mod_playervideo');
+        return;
+    }
+
+    container.innerHTML = cues.map((cue) => `
+        <button type="button" class="playervideo-transcript-line" data-start="${cue.start}">
+            <span class="mono">${formatTime(cue.start)}</span>
+            <span>${highlightMatch(cue.text, trimmed)}</span>
+        </button>
+    `).join('');
+};
+
+/**
+ * Re-renders the transcript panel with whatever search query is currently typed — called
+ * whenever the underlying caption changes, so the panel never keeps showing stale lines from a
+ * caption the student just switched away from.
+ *
+ * @returns {Promise<void>}
+ */
+const refreshTranscriptPanel = () => {
+    const search = document.getElementById('playervideo-transcript-search');
+    return renderTranscriptList(search ? search.value : '');
+};
+
+/**
+ * Attempts to move playback to targetTime, respecting the same anti-skip gate as the timeline
+ * bar's own click-to-seek — shared by the timeline and the transcript panel's cue rows so the
+ * two can never drift on what counts as an allowed seek.
+ *
+ * @param {number} targetTime Requested position, in seconds.
+ * @returns {Promise<void>}
+ */
+const attemptSeek = async(targetTime) => {
+    if (!seekUnrestricted && tracker && !tracker.canSeekTo(targetTime, playerData.allowseekahead)) {
+        announce(await getString('error_seekaheadblocked', 'mod_playervideo'));
+        return;
+    }
+    adapter.seek(targetTime);
+    document.getElementById('playervideo-playhead').style.left = `${percentForTime(targetTime)}%`;
+    document.getElementById('playervideo-ruler-start').textContent = formatTime(targetTime);
+};
+
+/**
+ * Wires the transcript panel's toggle button and search box, and shows the toggle only when at
+ * least one manual caption exists — there is nothing to search for a source with only native
+ * (or no) captions, since this plugin never has access to a native track's own cue text.
+ */
+const initTranscriptPanel = () => {
+    const toggle = document.getElementById('playervideo-transcript-toggle');
+    const panel = document.getElementById('playervideo-transcript-panel');
+    const search = document.getElementById('playervideo-transcript-search');
+    if (!toggle || !panel || !search) {
+        return;
+    }
+
+    if (manualCaptions.length === 0) {
+        toggle.hidden = true;
+        panel.hidden = true;
+        return;
+    }
+
+    toggle.hidden = false;
+    toggle.addEventListener('click', () => {
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        toggle.setAttribute('aria-expanded', String(!expanded));
+        panel.hidden = expanded;
+    });
+
+    search.addEventListener('input', () => renderTranscriptList(search.value));
+
+    document.getElementById('playervideo-transcript-list').addEventListener('click', (event) => {
+        const line = event.target.closest('.playervideo-transcript-line');
+        if (line) {
+            attemptSeek(parseFloat(line.dataset.start));
+        }
+    });
+
+    renderTranscriptList('');
 };
 
 /**
@@ -368,6 +499,7 @@ const initTimelineControls = async() => {
     await setPlayingState(false);
     initSpeedControl();
     await loadCaptionOptions();
+    initTranscriptPanel();
 
     adapter.onTimeUpdate((time) => {
         document.getElementById('playervideo-playhead').style.left = `${percentForTime(time)}%`;
@@ -375,15 +507,8 @@ const initTimelineControls = async() => {
     });
     adapter.onTimeUpdate(updateCaptionOverlay);
 
-    document.getElementById('playervideo-timeline').addEventListener('click', async(event) => {
-        const target = timestampForClientX(event.clientX);
-        if (!seekUnrestricted && tracker && !tracker.canSeekTo(target, playerData.allowseekahead)) {
-            announce(await getString('error_seekaheadblocked', 'mod_playervideo'));
-            return;
-        }
-        adapter.seek(target);
-        document.getElementById('playervideo-playhead').style.left = `${percentForTime(target)}%`;
-        document.getElementById('playervideo-ruler-start').textContent = formatTime(target);
+    document.getElementById('playervideo-timeline').addEventListener('click', (event) => {
+        attemptSeek(timestampForClientX(event.clientX));
     });
 
     document.getElementById('playervideo-playpause-btn').addEventListener('click', togglePlayPause);

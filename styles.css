@@ -142,6 +142,33 @@ video.ph-video-embed {
     max-width: 12rem;
 }
 
+.path-mod-playervideo .playervideo-transcript-list {
+    max-height: 16rem;
+    overflow-y: auto;
+}
+
+.path-mod-playervideo .playervideo-transcript-line {
+    display: flex;
+    gap: 0.625rem;
+    width: 100%;
+    padding: 0.375rem 0.5rem;
+    background: none;
+    border: 0;
+    border-radius: 0.3rem;
+    text-align: start;
+    cursor: pointer;
+}
+
+.path-mod-playervideo .playervideo-transcript-line:hover,
+.path-mod-playervideo .playervideo-transcript-line:focus-visible {
+    background-color: var(--bs-tertiary-bg, #f6f8fa);
+}
+
+.path-mod-playervideo .playervideo-transcript-line .mono {
+    flex: 0 0 auto;
+    color: var(--pv-ink-text-dim, #a6acb8);
+}
+
 .path-mod-playervideo .playervideo-timeline-wrap {
     margin-top: 0.875rem;
     display: grid;
@@ -157,6 +184,15 @@ video.ph-video-embed {
     font-size: 0.72rem;
     color: var(--pv-ink-text-dim, #a6acb8);
     padding: 0 0.125rem 0.375rem;
+}
+
+/*
+ * Was already referenced (the ruler above, since before Fase 8) without ever being defined —
+ * a real pre-existing gap, fixed here rather than left in place while touching this file again.
+ */
+.path-mod-playervideo .mono {
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 .path-mod-playervideo .playervideo-timeline {
