@@ -206,4 +206,66 @@ final class generate_questions_batch_test extends \advanced_testcase {
         $this->assertSame(45, $candidates[0]['timestamp']);
         $this->assertSame(3723, $candidates[1]['timestamp']);
     }
+
+    /**
+     * Regression test for a real timestamp-anchoring bypass found live: a garbled transcript
+     * copy-pasted straight from a real export (timestamp, per-cue duration and caption text all
+     * glued together with no separator, e.g. "1:051 minuto e 5 segundos...") led the AI to copy
+     * back a malformed tag like "1:051". The previous fallback did a naive `(int)` cast on any
+     * unparseable string, and `(int) "1:051"` silently evaluates to `1` (PHP stops at the first
+     * non-digit character) — a value that can coincidentally match a real, but completely
+     * unrelated, early transcript timestamp, letting a wrongly-anchored question slip past the
+     * caller's exact-match check instead of being rejected. normalise_timestamp() must now
+     * return -1 (never a real transcript second) for anything that does not cleanly parse.
+     *
+     * @return void
+     */
+    public function test_normalise_timestamp_rejects_a_malformed_string(): void {
+        $method = new \ReflectionMethod(generate_questions_batch::class, 'normalise_timestamp');
+        $method->setAccessible(true);
+
+        $this->assertSame(-1, $method->invoke(null, '1:051'));
+        $this->assertSame(-1, $method->invoke(null, 'around 1:28'));
+        $this->assertSame(-1, $method->invoke(null, 'not a timestamp'));
+        // Still accepts the genuinely valid shapes.
+        $this->assertSame(65, $method->invoke(null, '1:05'));
+        $this->assertSame(88, $method->invoke(null, 88));
+        $this->assertSame(88, $method->invoke(null, '88'));
+    }
+
+    /**
+     * Tests that annotate_transcript_timestamps() prefixes every recognisable line with its own
+     * clean "[m:ss]" tag, computed the same way extract_transcript_timestamps() validates
+     * against — including a garbled, glued-together line like a real transcript export produces.
+     *
+     * @return void
+     */
+    public function test_annotate_transcript_timestamps_tags_recognised_lines(): void {
+        $method = new \ReflectionMethod(generate_questions_batch::class, 'annotate_transcript_timestamps');
+        $method->setAccessible(true);
+
+        $transcript = "0:05 First line.\n0:1717 segundosdiversos e ainda encontrar imagens.\nNo timestamp here.";
+        $annotated = $method->invoke(null, $transcript);
+
+        $this->assertStringContainsString('[0:05] 0:05 First line.', $annotated);
+        $this->assertStringContainsString('[0:17] 0:1717 segundosdiversos', $annotated);
+        $this->assertStringContainsString("\nNo timestamp here.", $annotated);
+    }
+
+    /**
+     * Tests that build_prompt() asks for the given answer count and instructs the AI to copy
+     * one of the annotated "[m:ss]" tags as a plain string, never a raw number of seconds.
+     *
+     * @return void
+     */
+    public function test_build_prompt_includes_answer_count_and_tag_instruction(): void {
+        $method = new \ReflectionMethod(generate_questions_batch::class, 'build_prompt');
+        $method->setAccessible(true);
+
+        $prompt = $method->invoke(null, "[0:05] First line.", 3, 'mc', 6);
+
+        $this->assertStringContainsString('6 answer options', $prompt);
+        $this->assertStringContainsString('"[m:ss]" tags', $prompt);
+        $this->assertStringContainsString('[0:05] First line.', $prompt);
+    }
 }

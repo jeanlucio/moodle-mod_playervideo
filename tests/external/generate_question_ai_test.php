@@ -177,4 +177,21 @@ final class generate_question_ai_test extends \advanced_testcase {
         $this->assertNull($method->invoke(null, '{"answers": []}'));
         $this->assertNull($method->invoke(null, 'not even json'));
     }
+
+    /**
+     * Tests that build_prompt() asks for the given number of answer options for a multichoice
+     * question, and does not mention an answer count at all for an essay question.
+     *
+     * @return void
+     */
+    public function test_build_prompt_uses_the_given_answer_count(): void {
+        $method = new \ReflectionMethod(generate_question_ai::class, 'build_prompt');
+        $method->setAccessible(true);
+
+        $mcprompt = $method->invoke(null, 'multichoice', 30, '', 6);
+        $this->assertStringContainsString('exactly 6 answer', $mcprompt);
+
+        $essayprompt = $method->invoke(null, 'essay', 30, '', 6);
+        $this->assertStringNotContainsString('answer options', $essayprompt);
+    }
 }

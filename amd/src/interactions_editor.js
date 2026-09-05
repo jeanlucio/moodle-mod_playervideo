@@ -44,6 +44,12 @@ const TRIM_KEY_STEP = 1;
 /** @var {number} Maximum number of answers/options a multichoice question or poll can have. */
 const MAX_ANSWERS = 6;
 
+/**
+ * @var {number} Minimum number of answer options for an AI-generated multichoice question —
+ * mirrors question_service::MIN_ANSWERS server-side.
+ */
+const MIN_ANSWERS = 2;
+
 /** @var {string} Decorative checkmark icon for the "mark as correct" answer button. */
 const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">' +
     '<path d="M20 6 9 17l-5-5"/></svg>';
@@ -468,7 +474,7 @@ const renderBatchCandidates = async(root, modal, candidates) => {
 const openBatchGenerateModal = async() => {
     const [
         title, transcriptlabel, countlabel, formatlabel,
-        mclabel, essaylabel, mixlabel, generatelabel,
+        mclabel, essaylabel, mixlabel, answercountlabel, generatelabel,
     ] = await Promise.all([
         getString('generatebatch', 'mod_playervideo'),
         getString('pastetranscript', 'mod_playervideo'),
@@ -477,6 +483,7 @@ const openBatchGenerateModal = async() => {
         getString('qtypemultichoice', 'mod_playervideo'),
         getString('qtypeessay', 'mod_playervideo'),
         getString('qtypemix', 'mod_playervideo'),
+        getString('aianswercount', 'mod_playervideo'),
         getString('generate', 'mod_playervideo'),
     ]);
 
@@ -498,6 +505,11 @@ const openBatchGenerateModal = async() => {
             <option value="open">${escapeHtml(essaylabel)}</option>
             <option value="mix">${escapeHtml(mixlabel)}</option>
         </select>
+        <label class="playervideo-field-label" for="playervideo-batch-answercount">
+            ${escapeHtml(answercountlabel)}
+        </label>
+        <input type="number" min="${MIN_ANSWERS}" max="${MAX_ANSWERS}" value="4" class="form-control mb-2"
+            id="playervideo-batch-answercount">
         <button type="button" class="btn btn-primary" id="playervideo-batch-generate-btn">
             ${escapeHtml(generatelabel)}
         </button>
@@ -519,6 +531,17 @@ const openBatchGenerateModal = async() => {
     const modal = await Modal.create({title, body, large: true, removeOnClose: true, show: true});
     const root = modal.getRoot()[0];
 
+    const batchformatselect = root.querySelector('#playervideo-batch-format');
+    const batchanswercountlabel = root.querySelector('label[for="playervideo-batch-answercount"]');
+    const batchanswercountinput = root.querySelector('#playervideo-batch-answercount');
+    const toggleBatchAnswerCount = () => {
+        const isopenonly = batchformatselect.value === 'open';
+        batchanswercountlabel.hidden = isopenonly;
+        batchanswercountinput.hidden = isopenonly;
+    };
+    batchformatselect.addEventListener('change', toggleBatchAnswerCount);
+    toggleBatchAnswerCount();
+
     root.querySelector('#playervideo-batch-generate-btn').addEventListener('click', async(event) => {
         const button = event.target;
         button.disabled = true;
@@ -528,6 +551,7 @@ const openBatchGenerateModal = async() => {
                 transcript: root.querySelector('#playervideo-batch-transcript').value,
                 count: parseInt(root.querySelector('#playervideo-batch-count').value, 10) || 1,
                 format: root.querySelector('#playervideo-batch-format').value,
+                answercount: parseInt(batchanswercountinput.value, 10) || 4,
             });
             await renderBatchCandidates(root, modal, result.candidates);
         } catch (error) {
@@ -1357,13 +1381,15 @@ const renderQuestionEditor = async(existing) => {
      * has — nothing panel-specific to wire beyond setting selectedQuestionId.
      */
     const renderAiSubpanel = async() => {
-        const [contextlabel, qtypelabel, mclabel, essaylabel, generatebuttonlabel] = await Promise.all([
-            getString('aicontext', 'mod_playervideo'),
-            getString('questiontype', 'mod_playervideo'),
-            getString('qtypemultichoice', 'mod_playervideo'),
-            getString('qtypeessay', 'mod_playervideo'),
-            getString('generate', 'mod_playervideo'),
-        ]);
+        const [contextlabel, qtypelabel, mclabel, essaylabel, answercountlabel, generatebuttonlabel] =
+            await Promise.all([
+                getString('aicontext', 'mod_playervideo'),
+                getString('questiontype', 'mod_playervideo'),
+                getString('qtypemultichoice', 'mod_playervideo'),
+                getString('qtypeessay', 'mod_playervideo'),
+                getString('aianswercount', 'mod_playervideo'),
+                getString('generate', 'mod_playervideo'),
+            ]);
         const sub = document.getElementById('playervideo-question-subpanel');
         sub.innerHTML = `
             <label class="playervideo-field-label" for="playervideo-ai-context">${escapeHtml(contextlabel)}</label>
@@ -1373,10 +1399,26 @@ const renderQuestionEditor = async(existing) => {
                 <option value="multichoice">${escapeHtml(mclabel)}</option>
                 <option value="essay">${escapeHtml(essaylabel)}</option>
             </select>
+            <label class="playervideo-field-label" for="playervideo-ai-answercount" id="playervideo-ai-answercount-label">
+                ${escapeHtml(answercountlabel)}
+            </label>
+            <input type="number" min="${MIN_ANSWERS}" max="${MAX_ANSWERS}" value="4" class="form-control mb-2"
+                id="playervideo-ai-answercount">
             <button type="button" class="btn btn-primary mb-2" id="playervideo-ai-generate-btn">
                 ${escapeHtml(generatebuttonlabel)}
             </button>
         `;
+
+        const qtypeselect = document.getElementById('playervideo-ai-qtype');
+        const answercountlabelel = document.getElementById('playervideo-ai-answercount-label');
+        const answercountinput = document.getElementById('playervideo-ai-answercount');
+        const toggleAnswerCount = () => {
+            const isessay = qtypeselect.value === 'essay';
+            answercountlabelel.hidden = isessay;
+            answercountinput.hidden = isessay;
+        };
+        qtypeselect.addEventListener('change', toggleAnswerCount);
+        toggleAnswerCount();
 
         document.getElementById('playervideo-ai-generate-btn').addEventListener('click', async(event) => {
             const button = event.target;
@@ -1388,6 +1430,7 @@ const renderQuestionEditor = async(existing) => {
                     timestamp,
                     context: document.getElementById('playervideo-ai-context').value,
                     qtype: document.getElementById('playervideo-ai-qtype').value,
+                    answercount: parseInt(answercountinput.value, 10) || 4,
                 });
                 selectedQuestionId = result.questionid;
                 const answerslist = result.answers.map(

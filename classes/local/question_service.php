@@ -41,6 +41,13 @@ use stdClass;
  * {@see \mod_playerpuzzle\local\engine\question_fetcher}.
  */
 class question_service {
+    /** @var int Fewest answer options a multichoice question can have (build_multichoice_formdata()). */
+    public const MIN_ANSWERS = 2;
+
+    /** @var int Most answer options a multichoice question can have — the same ceiling the
+     * manual "create here" form enforces client-side (MAX_ANSWERS, interactions_editor.js). */
+    public const MAX_ANSWERS = 6;
+
     /**
      * Returns the id of the default question category for a context, creating it if needed.
      *

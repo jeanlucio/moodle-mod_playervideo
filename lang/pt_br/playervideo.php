@@ -32,6 +32,7 @@ $string['addhere'] = 'Adicionar aqui';
 $string['addinteraction'] = 'Adicionar interação';
 $string['addmarkerat'] = 'Adicionar marcação em {$a}';
 $string['addpolloption'] = 'Adicionar opção';
+$string['aianswercount'] = 'Número de alternativas';
 $string['aicontext'] = 'O que está acontecendo no vídeo neste ponto? (opcional)';
 $string['aisuggestionlabel'] = 'Sugestão da IA';
 $string['aiusage_batch'] = 'Gerar perguntas a partir de transcript (PlayerVideo)';

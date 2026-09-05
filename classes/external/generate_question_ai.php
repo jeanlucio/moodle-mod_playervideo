@@ -63,6 +63,12 @@ class generate_question_ai extends external_api {
                 ''
             ),
             'qtype' => new external_value(PARAM_ALPHA, 'multichoice | essay', VALUE_DEFAULT, 'multichoice'),
+            'answercount' => new external_value(
+                PARAM_INT,
+                'Number of answer options for a multichoice question (clamped 2-6)',
+                VALUE_DEFAULT,
+                4
+            ),
         ]);
     }
 
@@ -73,14 +79,22 @@ class generate_question_ai extends external_api {
      * @param int $timestamp Video timestamp, in seconds.
      * @param string $videocontext What is happening in the video around this timestamp.
      * @param string $qtype 'multichoice' | 'essay'.
+     * @param int $answercount Number of answer options for a multichoice question (clamped 2-6).
      * @return array The created question id and a preview for the teacher's review.
      */
-    public static function execute(int $playervideoid, int $timestamp, string $videocontext, string $qtype): array {
+    public static function execute(
+        int $playervideoid,
+        int $timestamp,
+        string $videocontext,
+        string $qtype,
+        int $answercount = 4
+    ): array {
         $params = self::validate_parameters(self::execute_parameters(), [
             'playervideoid' => $playervideoid,
             'timestamp' => $timestamp,
             'context' => $videocontext,
             'qtype' => $qtype,
+            'answercount' => $answercount,
         ]);
 
         $cm = get_coursemodule_from_instance('playervideo', $params['playervideoid'], 0, false, MUST_EXIST);
@@ -97,7 +111,11 @@ class generate_question_ai extends external_api {
             throw new moodle_exception('error_noaisource', 'mod_playervideo');
         }
 
-        $prompt = self::build_prompt($params['qtype'], $params['timestamp'], $params['context']);
+        $answercount = max(
+            question_service::MIN_ANSWERS,
+            min(question_service::MAX_ANSWERS, $params['answercount'])
+        );
+        $prompt = self::build_prompt($params['qtype'], $params['timestamp'], $params['context'], $answercount);
         $description = get_string('aiusage_question', 'mod_playervideo');
         $result = ai_service::generate($prompt, $description, $modulecontext);
 
@@ -132,9 +150,15 @@ class generate_question_ai extends external_api {
      * @param int $timestamp Video timestamp, in seconds — included for the AI's own reference,
      *      never used as ground truth for anything the server later validates.
      * @param string $videocontext What is happening in the video around this timestamp.
+     * @param int $answercount Number of answer options for a multichoice question.
      * @return string The prompt text.
      */
-    private static function build_prompt(string $qtype, int $timestamp, string $videocontext): string {
+    private static function build_prompt(
+        string $qtype,
+        int $timestamp,
+        string $videocontext,
+        int $answercount
+    ): string {
         $parts = [
             'You are an instructional designer creating one comprehension question for a point '
                 . 'in an educational video (at approximately ' . $timestamp . ' seconds in).',
@@ -153,8 +177,9 @@ class generate_question_ai extends external_api {
             $parts[] = 'Reply ONLY with a valid JSON object in this exact format, no code fences: '
                 . '{"questiontext": "..."}';
         } else {
-            $parts[] = 'Write ONE multiple-choice question with exactly 4 answer options, only '
-                . 'one of them correct. The distractors should be plausible, not obviously wrong.';
+            $parts[] = "Write ONE multiple-choice question with exactly {$answercount} answer "
+                . 'options, only one of them correct. The distractors should be plausible, not '
+                . 'obviously wrong.';
             $parts[] = 'Reply ONLY with a valid JSON object in this exact format, no code fences: '
                 . '{"questiontext": "...", "answers": [{"text": "...", "correct": true}, '
                 . '{"text": "...", "correct": false}]}';

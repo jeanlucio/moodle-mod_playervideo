@@ -39,7 +39,7 @@ use moodle_exception;
  * Generates up to COUNT questions from a pasted transcript, letting the AI pick the best
  * moments instead of the teacher choosing a timestamp for each one manually.
  *
- * Timestamp anchoring against alucination: every timestamp the AI returns is validated against
+ * Timestamp anchoring against hallucination: every timestamp the AI returns is validated against
  * the transcript actually sent — a timestamp is only accepted when it matches one of the
  * timestamps the transcript itself declares (see {@see extract_transcript_timestamps()}). An AI
  * is bad at arithmetic/timing precision, so a "plausible but made up" timestamp is a real risk;
@@ -70,6 +70,12 @@ class generate_questions_batch extends external_api {
             'transcript' => new external_value(PARAM_RAW, 'Pasted transcript, one timestamped line per entry'),
             'count' => new external_value(PARAM_INT, 'Number of questions to generate'),
             'format' => new external_value(PARAM_ALPHA, 'mc | open | mix', VALUE_DEFAULT, 'mc'),
+            'answercount' => new external_value(
+                PARAM_INT,
+                'Number of answer options per multichoice question (clamped 2-6)',
+                VALUE_DEFAULT,
+                4
+            ),
         ]);
     }
 
@@ -80,14 +86,22 @@ class generate_questions_batch extends external_api {
      * @param string $transcript Pasted transcript, one timestamped line per entry.
      * @param int $count Number of questions to generate.
      * @param string $format 'mc' | 'open' | 'mix'.
+     * @param int $answercount Number of answer options per multichoice question (clamped 2-6).
      * @return array List of generated question candidates, pending teacher review.
      */
-    public static function execute(int $playervideoid, string $transcript, int $count, string $format): array {
+    public static function execute(
+        int $playervideoid,
+        string $transcript,
+        int $count,
+        string $format,
+        int $answercount = 4
+    ): array {
         $params = self::validate_parameters(self::execute_parameters(), [
             'playervideoid' => $playervideoid,
             'transcript' => $transcript,
             'count' => $count,
             'format' => $format,
+            'answercount' => $answercount,
         ]);
 
         $cm = get_coursemodule_from_instance('playervideo', $params['playervideoid'], 0, false, MUST_EXIST);
@@ -106,6 +120,7 @@ class generate_questions_batch extends external_api {
         // Clamp regardless of what the client sent — a client-supplied loop bound must never be
         // trusted as-is (see the project's own rule on this exact class of issue).
         $requestcount = max(1, min(self::MAX_COUNT, $params['count']));
+        $answercount = max(question_service::MIN_ANSWERS, min(question_service::MAX_ANSWERS, $params['answercount']));
 
         if (!ai_service::has_ai_source($modulecontext)) {
             throw new moodle_exception('error_noaisource', 'mod_playervideo');
@@ -113,7 +128,12 @@ class generate_questions_batch extends external_api {
 
         $validtimestamps = self::extract_transcript_timestamps($params['transcript']);
 
-        $prompt = self::build_prompt($params['transcript'], $requestcount, $params['format']);
+        $prompt = self::build_prompt(
+            self::annotate_transcript_timestamps($params['transcript']),
+            $requestcount,
+            $params['format'],
+            $answercount
+        );
         $description = get_string('aiusage_batch', 'mod_playervideo');
         $result = ai_service::generate($prompt, $description, $modulecontext);
 
@@ -194,20 +214,63 @@ class generate_questions_batch extends external_api {
     }
 
     /**
-     * Builds the AI prompt for the batch, asking it to pick the best moments itself.
+     * Prefixes every recognisable transcript line with its own clean "[m:ss]" tag, computed by
+     * the same trusted parser {@see extract_transcript_timestamps()} validates against — instead
+     * of asking the AI to eyeball a timestamp out of raw pasted text.
+     *
+     * A real transcript export (e.g. copied from YouTube's own panel) commonly glues the
+     * timestamp, a per-cue duration annotation and the caption text together with no separator
+     * at all — confirmed live with a real paste: a line like "0:1717 segundos diversos e ainda
+     * ..." gives a human (and an AI) no visual boundary between the "0:17" timestamp, the "17
+     * segundos" duration note, and the actual sentence. The parser already extracts the correct
+     * value from lines shaped like that; tagging each line with it up front removes the need for
+     * the AI to also solve that same ambiguity by eye, which is exactly where it was going wrong.
      *
      * @param string $transcript The pasted transcript text.
+     * @return string The same text, each recognised line prefixed with "[m:ss] ".
+     */
+    private static function annotate_transcript_timestamps(string $transcript): string {
+        $lines = [];
+        foreach (explode("\n", $transcript) as $line) {
+            $seconds = caption_service::parse_line_timestamp($line);
+            $lines[] = $seconds === null ? $line : '[' . self::format_mmss($seconds) . '] ' . $line;
+        }
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Formats a whole number of seconds as "m:ss" (no leading zero on minutes, matching how a
+     * real transcript export usually displays its own timestamps).
+     *
+     * @param int $seconds Timestamp in seconds.
+     * @return string "m:ss".
+     */
+    private static function format_mmss(int $seconds): string {
+        return sprintf('%d:%02d', intdiv($seconds, 60), $seconds % 60);
+    }
+
+    /**
+     * Builds the AI prompt for the batch, asking it to pick the best moments itself.
+     *
+     * @param string $annotatedtranscript The pasted transcript, pre-tagged with "[m:ss]" by
+     *      {@see annotate_transcript_timestamps()}.
      * @param int $count Number of questions to generate.
      * @param string $format 'mc' | 'open' | 'mix'.
+     * @param int $answercount Number of answer options per multichoice question.
      * @return string The prompt text.
      */
-    private static function build_prompt(string $transcript, int $count, string $format): string {
+    private static function build_prompt(
+        string $annotatedtranscript,
+        int $count,
+        string $format,
+        int $answercount
+    ): string {
         $formatinstruction = match ($format) {
             'open' => 'Every question must be open-ended (type "essay"), requiring a short written answer.',
-            'mix' => 'Choose the best type for each question: "multichoice" (4 options, one correct) '
-                . 'or "essay" (open-ended, short written answer).',
-            default => 'Every question must be multiple-choice (type "multichoice"), with exactly 4 '
-                . 'answer options, only one correct.',
+            'mix' => "Choose the best type for each question: \"multichoice\" ({$answercount} options, one "
+                . 'correct) or "essay" (open-ended, short written answer).',
+            default => 'Every question must be multiple-choice (type "multichoice"), with exactly '
+                . "{$answercount} answer options, only one correct.",
         };
 
         return implode("\n", [
@@ -215,14 +278,16 @@ class generate_questions_batch extends external_api {
                 . 'video, from its transcript below.',
             "Pick the {$count} best moments in the transcript for a comprehension question.",
             $formatinstruction,
-            'CRITICAL: for each question, "timestamp" MUST be copied exactly from a timestamp that '
-                . 'already appears in the transcript below — never invent or calculate one.',
+            'Each transcript line below starts with its own "[m:ss]" tag.',
+            'CRITICAL: for each question, "timestamp" MUST be exactly one of these "[m:ss]" tags, '
+                . 'copied as a plain "m:ss" string (without the brackets) — never a raw number of '
+                . 'seconds, never a tag you invent or calculate yourself.',
             'Reply ONLY with a valid JSON object in this exact format, no code fences: '
-                . '{"questions": [{"timestamp": <seconds>, "qtype": "multichoice"|"essay", '
+                . '{"questions": [{"timestamp": "m:ss", "qtype": "multichoice"|"essay", '
                 . '"questiontext": "...", "answers": [{"text": "...", "correct": true}, ...]}]} '
                 . '(omit "answers" entirely for an essay question)',
             '--- TRANSCRIPT ---',
-            $transcript,
+            $annotatedtranscript,
         ]);
     }
 
@@ -275,24 +340,40 @@ class generate_questions_batch extends external_api {
     }
 
     /**
-     * Normalises a "timestamp" value from the AI response into whole seconds.
+     * Normalises a "timestamp" value from the AI response into whole seconds, or -1 if it
+     * cannot be parsed with confidence.
      *
-     * The prompt asks for a plain integer, but a model does not always comply — it sometimes
-     * echoes the "mm:ss"/"h:mm:ss" text it saw in the transcript instead. A naive `(int)` cast on
-     * a string like "0:45" silently truncates to its leading digits (0), which would then fail
-     * the anchoring check against a real "45 seconds" entry even though the model picked a valid
-     * moment. Accepting both shapes here keeps the anchoring check itself strict (still an exact
-     * match against {@see extract_transcript_timestamps()}), instead of loosening it to compensate.
+     * The prompt now asks for a plain "m:ss" string (see {@see build_prompt()}), but a model
+     * does not always comply exactly — it may still echo a raw integer, or a malformed variant
+     * of the tag. A previous version of this method fell back to a naive `(int)` cast on
+     * whatever string it got, which is genuinely dangerous: `(int) "1:051"` (a real garbled copy
+     * confirmed live, from a transcript line whose timestamp ran directly into the next word
+     * with no separator) silently evaluates to `1` — PHP's leading-digits-before-the-first-non-
+     * digit-character rule — which can coincidentally equal a real, but completely unrelated,
+     * transcript timestamp. That let a mis-copied "1:05"-ish tag slip past the caller's
+     * anchoring check anchored at the wrong second instead of being correctly rejected. Anything
+     * that does not cleanly parse now returns -1, which can never appear in
+     * {@see extract_transcript_timestamps()}'s output (always >= 0), so the caller's exact-match
+     * check rejects it as intended.
      *
      * @param mixed $value Raw "timestamp" value from the decoded JSON.
-     * @return int Timestamp in whole seconds.
+     * @return int Timestamp in whole seconds, or -1 if unparseable.
      */
     private static function normalise_timestamp(mixed $value): int {
-        if (is_string($value) && preg_match('/^(?:(\d+):)?(\d{1,2}):(\d{2})$/', trim($value), $matches)) {
-            $hours = $matches[1] !== '' ? (int) $matches[1] : 0;
-            return $hours * 3600 + ((int) $matches[2]) * 60 + (int) $matches[3];
+        if (is_int($value)) {
+            return $value;
         }
-        return (int) $value;
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if (preg_match('/^(?:(\d+):)?(\d{1,2}):(\d{2})$/', $trimmed, $matches)) {
+                $hours = $matches[1] !== '' ? (int) $matches[1] : 0;
+                return $hours * 3600 + ((int) $matches[2]) * 60 + (int) $matches[3];
+            }
+            if (ctype_digit($trimmed)) {
+                return (int) $trimmed;
+            }
+        }
+        return -1;
     }
 
     /**
