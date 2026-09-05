@@ -167,6 +167,75 @@ const renderStudentTable = async(rows) => {
 };
 
 /**
+ * Formats a bucket index as the m:ss range of video it represents.
+ *
+ * @param {object} engagement mod_playervideo_get_report's "engagement" object.
+ * @param {number} index Bucket index.
+ * @returns {string}
+ */
+const formatBucketRange = (engagement, index) => {
+    const start = engagement.windowstart + (index * engagement.bucketlength);
+    const end = start + engagement.bucketlength;
+    return `${formatTime(start)}–${formatTime(end)}`;
+};
+
+/**
+ * Renders the class-wide engagement timeline (Fase 10b): a bar per region of the playback
+ * window, plus a plain-text summary of the three highlighted regions — the highlight is never
+ * conveyed by colour alone, matching the plugin's own accessibility rules.
+ *
+ * @param {object} engagement mod_playervideo_get_report's "engagement" object.
+ * @returns {Promise<void>}
+ */
+const renderEngagement = async(engagement) => {
+    const container = document.getElementById('playervideo-report-engagement');
+
+    if (engagement.mostwatchedbucket === null) {
+        container.textContent = await getString('noengagementreport', 'mod_playervideo');
+        return;
+    }
+
+    const barlabel = await getString('engagementbarlabel', 'mod_playervideo');
+    const peak = Math.max(...engagement.buckets) || 1;
+
+    const bars = engagement.buckets.map((seconds, index) => {
+        const heightpct = Math.round((seconds / peak) * 100);
+        const classes = ['playervideo-engagement-bar'];
+        if (index === engagement.mostwatchedbucket) {
+            classes.push('is-mostwatched');
+        }
+        if (index === engagement.leastwatchedbucket) {
+            classes.push('is-leastwatched');
+        }
+        if (index === engagement.dropoffbucket) {
+            classes.push('is-dropoff');
+        }
+        return `<div class="${classes.join(' ')}" style="height: ${heightpct}%"
+            title="${formatBucketRange(engagement, index)}"></div>`;
+    }).join('');
+
+    const summaryitems = [];
+    summaryitems.push(await getString(
+        'engagementmostwatched', 'mod_playervideo', formatBucketRange(engagement, engagement.mostwatchedbucket)
+    ));
+    summaryitems.push(await getString(
+        'engagementleastwatched', 'mod_playervideo', formatBucketRange(engagement, engagement.leastwatchedbucket)
+    ));
+    if (engagement.dropoffbucket !== null) {
+        summaryitems.push(await getString(
+            'engagementdropoff', 'mod_playervideo', formatBucketRange(engagement, engagement.dropoffbucket)
+        ));
+    }
+
+    container.innerHTML = `
+        <div class="playervideo-engagement-bars" role="img" aria-label="${escapeHtml(barlabel)}">${bars}</div>
+        <ul class="playervideo-engagement-summary">
+            ${summaryitems.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+        </ul>
+    `;
+};
+
+/**
  * Initialises the analytics dashboard for one instance.
  *
  * @param {number} instanceid PlayerVideo instance id.
@@ -177,6 +246,7 @@ export const init = async(instanceid) => {
         const result = await call('mod_playervideo_get_report', {playervideoid: instanceid});
         await renderQuestionTable(result.byquestion);
         await renderStudentTable(result.bystudent);
+        await renderEngagement(result.engagement);
     } catch (error) {
         Notification.exception(error);
     }

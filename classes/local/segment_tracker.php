@@ -136,4 +136,24 @@ class segment_tracker {
         }
         return (float) end($normalised)[1];
     }
+
+    /**
+     * Returns only the portions of the given segments that overlap a window.
+     *
+     * @param array $segments Collection of [start, end] pairs.
+     * @param float $windowstart Window start, in seconds.
+     * @param float $windowend Window end, in seconds.
+     * @return array The overlapping [start, end] pairs, clipped to the window's own bounds.
+     */
+    public static function clip_to_window(array $segments, float $windowstart, float $windowend): array {
+        $clipped = [];
+        foreach (self::normalise($segments) as [$start, $end]) {
+            $overlapstart = max($start, $windowstart);
+            $overlapend = min($end, $windowend);
+            if ($overlapend > $overlapstart) {
+                $clipped[] = [$overlapstart, $overlapend];
+            }
+        }
+        return $clipped;
+    }
 }

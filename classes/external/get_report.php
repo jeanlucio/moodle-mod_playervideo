@@ -31,14 +31,15 @@ use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
 use mod_playervideo\local\attempt_manager;
+use mod_playervideo\local\engagement_aggregator;
 use mod_playervideo\local\group_access;
 use mod_playervideo\local\question_service;
 
 /**
- * Two aggregate views, both built from batch queries (one per aggregate, never one per row in a
+ * Three aggregate views, all built from batch queries (one per aggregate, never one per row in a
  * loop — see the project's own rule against `$DB` calls inside loops): per-question (% correct
- * for multichoice, correction status counts for open questions) and per-student (attempts taken,
- * final grade, completion, time watched).
+ * for multichoice, correction status counts for open questions), per-student (attempts taken,
+ * final grade, completion, time watched), and a class-wide engagement timeline (Fase 10b).
  */
 class get_report extends external_api {
     /**
@@ -68,10 +69,41 @@ class get_report extends external_api {
         self::validate_context($context);
         require_capability('mod/playervideo:viewreports', $context);
 
+        $students = self::eligible_students($cm, $context);
+        $userids = array_map(static fn($user): int => (int) $user->id, array_values($students));
+
         return [
             'byquestion' => self::build_question_stats($params['playervideoid'], $context),
-            'bystudent' => self::build_student_stats($params['playervideoid'], $cm),
+            'bystudent' => self::build_student_stats($params['playervideoid'], $cm, $students, $userids),
+            'engagement' => self::build_engagement($params['playervideoid'], $userids),
         ];
+    }
+
+    /**
+     * Resolves the students eligible to appear in this report: enrolled with the attempt
+     * capability, then narrowed by the current group restriction, if any.
+     *
+     * @param \stdClass $cm The course module record.
+     * @param \context $context The activity's context.
+     * @return array Student records (id, name fields), keyed by userid.
+     */
+    private static function eligible_students(\stdClass $cm, \context $context): array {
+        $students = get_enrolled_users(
+            $context,
+            'mod/playervideo:attempt',
+            0,
+            'u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic, u.middlename, u.alternatename'
+        );
+
+        $restricteduserids = group_access::restricted_userids($cm, $context);
+        if ($restricteduserids !== null) {
+            $students = array_filter(
+                $students,
+                static fn($user): bool => in_array((int) $user->id, $restricteduserids, true)
+            );
+        }
+
+        return $students;
     }
 
     /**
@@ -160,33 +192,18 @@ class get_report extends external_api {
      *
      * @param int $playervideoid PlayerVideo instance id.
      * @param \stdClass $cm The course module record.
+     * @param array $students Eligible student records, from eligible_students().
+     * @param array $userids Eligible student ids, from eligible_students().
      * @return array Per-student rows, ordered by name.
      */
-    private static function build_student_stats(int $playervideoid, \stdClass $cm): array {
+    private static function build_student_stats(int $playervideoid, \stdClass $cm, array $students, array $userids): array {
         global $DB;
-
-        $context = context_module::instance($cm->id);
-        $instance = $DB->get_record('playervideo', ['id' => $playervideoid], '*', MUST_EXIST);
-
-        $students = get_enrolled_users(
-            $context,
-            'mod/playervideo:attempt',
-            0,
-            'u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic, u.middlename, u.alternatename'
-        );
-
-        $restricteduserids = group_access::restricted_userids($cm, $context);
-        if ($restricteduserids !== null) {
-            $students = array_filter(
-                $students,
-                static fn($user): bool => in_array((int) $user->id, $restricteduserids, true)
-            );
-        }
 
         if (empty($students)) {
             return [];
         }
-        $userids = array_map(static fn($user): int => (int) $user->id, array_values($students));
+
+        $instance = $DB->get_record('playervideo', ['id' => $playervideoid], '*', MUST_EXIST);
 
         [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
 
@@ -249,6 +266,44 @@ class get_report extends external_api {
     }
 
     /**
+     * Builds the class-wide engagement timeline: how much of each region of the video was
+     * watched across every eligible student, never broken down by individual student (Fase 10b).
+     *
+     * @param int $playervideoid PlayerVideo instance id.
+     * @param array $userids Eligible student ids, from eligible_students().
+     * @return array{
+     *     buckets: float[],
+     *     mostwatchedbucket: int|null,
+     *     leastwatchedbucket: int|null,
+     *     dropoffbucket: int|null
+     * }
+     */
+    private static function build_engagement(int $playervideoid, array $userids): array {
+        global $DB;
+
+        $instance = $DB->get_record('playervideo', ['id' => $playervideoid], '*', MUST_EXIST);
+        $windowstart = $instance->trimstart !== null ? (float) $instance->trimstart : 0.0;
+        $windowend = $instance->trimend !== null ? (float) $instance->trimend : (float) $instance->duration;
+
+        $segmentsbyuser = [];
+        if ($userids !== []) {
+            [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+            $progressrecords = $DB->get_records_sql(
+                "SELECT userid, segments
+                   FROM {playervideo_progress}
+                  WHERE playervideoid = :playervideoid AND userid $insql",
+                array_merge(['playervideoid' => $playervideoid], $inparams)
+            );
+            foreach ($progressrecords as $row) {
+                $decoded = json_decode((string) $row->segments, true);
+                $segmentsbyuser[(int) $row->userid] = is_array($decoded) ? $decoded : [];
+            }
+        }
+
+        return engagement_aggregator::build($segmentsbyuser, $windowstart, $windowend);
+    }
+
+    /**
      * Returns the return value definitions.
      *
      * @return external_single_structure
@@ -286,6 +341,35 @@ class get_report extends external_api {
                 ]),
                 'Per-student aggregate, ordered by name'
             ),
+            'engagement' => new external_single_structure([
+                'buckets' => new external_multiple_structure(
+                    new external_value(PARAM_FLOAT, 'Seconds watched by the class in this region'),
+                    'Class-wide watched seconds per equal-width region of the playback window'
+                ),
+                'windowstart' => new external_value(PARAM_FLOAT, 'Playback window start, in seconds'),
+                'bucketlength' => new external_value(PARAM_FLOAT, 'Width of one region, in seconds'),
+                'mostwatchedbucket' => new external_value(
+                    PARAM_INT,
+                    'Index of the most-watched region',
+                    VALUE_OPTIONAL,
+                    null,
+                    NULL_ALLOWED
+                ),
+                'leastwatchedbucket' => new external_value(
+                    PARAM_INT,
+                    'Index of the least-watched region',
+                    VALUE_OPTIONAL,
+                    null,
+                    NULL_ALLOWED
+                ),
+                'dropoffbucket' => new external_value(
+                    PARAM_INT,
+                    'Index of the region with the largest drop in viewership from the one before it',
+                    VALUE_OPTIONAL,
+                    null,
+                    NULL_ALLOWED
+                ),
+            ]),
         ]);
     }
 }

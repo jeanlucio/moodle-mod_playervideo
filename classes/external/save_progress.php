@@ -177,14 +177,7 @@ class save_progress extends external_api {
             return 0.0;
         }
 
-        $watched = 0.0;
-        foreach ($segments as [$start, $end]) {
-            $overlapstart = max($start, $windowstart);
-            $overlapend = min($end, $windowend);
-            if ($overlapend > $overlapstart) {
-                $watched += $overlapend - $overlapstart;
-            }
-        }
+        $watched = segment_tracker::unique_seconds(segment_tracker::clip_to_window($segments, $windowstart, $windowend));
 
         return round(min(100, ($watched / $windowlength) * 100), 2);
     }

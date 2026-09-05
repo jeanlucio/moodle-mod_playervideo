@@ -760,6 +760,45 @@ video.ph-video-embed {
     transition: width 0.3s ease;
 }
 
+/*
+ * Class-wide engagement timeline (Fase 10b, report.php). Highlighted bars use colour as a
+ * convenience only — the same three regions are always named in plain text in the summary
+ * list right below the chart, never conveyed by colour alone.
+ */
+.path-mod-playervideo .playervideo-engagement-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    height: 6rem;
+    margin-bottom: 0.75rem;
+}
+
+.path-mod-playervideo .playervideo-engagement-bar {
+    flex: 1 1 0;
+    min-height: 2px;
+    background: var(--primary, #0f6cbf);
+    transition: height 0.3s ease;
+}
+
+.path-mod-playervideo .playervideo-engagement-bar.is-mostwatched {
+    background: var(--success, #4a8f6b);
+}
+
+.path-mod-playervideo .playervideo-engagement-bar.is-leastwatched {
+    background: var(--warning, #cc8925);
+}
+
+.path-mod-playervideo .playervideo-engagement-bar.is-dropoff {
+    background: var(--danger, #ca3120);
+}
+
+.path-mod-playervideo .playervideo-engagement-summary {
+    list-style: none;
+    padding-inline-start: 0;
+    margin-bottom: 0;
+    font-size: 0.9rem;
+}
+
 .path-mod-playervideo .playervideo-accessibility-links {
     display: flex;
     gap: 1rem;

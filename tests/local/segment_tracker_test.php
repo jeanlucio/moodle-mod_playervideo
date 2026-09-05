@@ -176,4 +176,25 @@ final class segment_tracker_test extends \advanced_testcase {
     public function test_furthest_position_is_zero_when_empty(): void {
         $this->assertEqualsWithDelta(0.0, segment_tracker::furthest_position([]), 0.001);
     }
+
+    /**
+     * Tests that clip_to_window keeps only the portions of each segment inside the window,
+     * trimming a segment that straddles the boundary instead of dropping it whole.
+     *
+     * @return void
+     */
+    public function test_clip_to_window_trims_straddling_segments(): void {
+        $result = segment_tracker::clip_to_window([[0, 20], [50, 60]], 10.0, 55.0);
+
+        $this->assertSame([[10.0, 20.0], [50.0, 55.0]], $result);
+    }
+
+    /**
+     * Tests that a segment entirely outside the window is dropped, not clamped to an empty range.
+     *
+     * @return void
+     */
+    public function test_clip_to_window_drops_segments_entirely_outside(): void {
+        $this->assertSame([], segment_tracker::clip_to_window([[0, 5]], 10.0, 20.0));
+    }
 }

@@ -186,6 +186,48 @@ final class get_report_test extends \advanced_testcase {
         $this->assertFalse($result['error']);
         $this->assertSame([], $result['data']['byquestion']);
         $this->assertSame([], $result['data']['bystudent']);
+        $this->assertSame(0.0, array_sum($result['data']['engagement']['buckets']));
+        $this->assertNull($result['data']['engagement']['mostwatchedbucket']);
+    }
+
+    /**
+     * Tests that the class-wide engagement timeline (Fase 10b) sums watched seconds across every
+     * eligible student's already-normalised segments, without exposing a per-student breakdown.
+     *
+     * @return void
+     */
+    public function test_engagement_aggregates_watched_seconds_across_students(): void {
+        global $DB;
+
+        $DB->set_field('playervideo', 'duration', 40, ['id' => $this->instance->id]);
+
+        $studentone = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($studentone->id, $this->course->id, 'student');
+        $studenttwo = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($studenttwo->id, $this->course->id, 'student');
+
+        $now = time();
+        foreach ([[$studentone, '[[5,10]]'], [$studenttwo, '[[8,20]]']] as [$student, $segments]) {
+            $DB->insert_record('playervideo_progress', (object) [
+                'playervideoid' => $this->instance->id,
+                'userid' => $student->id,
+                'lastposition' => 0,
+                'watchedpct' => 0,
+                'watchedtoend' => 0,
+                'segments' => $segments,
+                'timecreated' => $now,
+                'timemodified' => $now,
+            ]);
+        }
+
+        $result = $this->call(['playervideoid' => $this->instance->id]);
+
+        $this->assertFalse($result['error']);
+        $engagement = $result['data']['engagement'];
+        $this->assertEqualsWithDelta(2.0, $engagement['buckets'][8], 0.001);
+        $this->assertEqualsWithDelta(2.0, $engagement['buckets'][9], 0.001);
+        $this->assertSame(8, $engagement['mostwatchedbucket']);
+        $this->assertSame(0, $engagement['leastwatchedbucket']);
     }
 
     /**
@@ -236,5 +278,56 @@ final class get_report_test extends \advanced_testcase {
         $seenuserids = array_column($result['data']['bystudent'], 'userid');
         $this->assertContains((int) $studentingroupone->id, $seenuserids);
         $this->assertNotContains((int) $studeningrouptwo->id, $seenuserids);
+    }
+
+    /**
+     * Tests that the engagement timeline (Fase 10b) respects the same group restriction as the
+     * per-student aggregate — a group-restricted teacher must never see another group's watched
+     * seconds folded into the class-wide totals.
+     *
+     * @return void
+     */
+    public function test_engagement_excludes_students_from_a_different_separate_group(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course(['groupmode' => SEPARATEGROUPS, 'groupmodeforce' => 1]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
+        $instance = $generator->create_instance(['course' => $course->id, 'groupmode' => SEPARATEGROUPS]);
+        $DB->set_field('playervideo', 'duration', 40, ['id' => $instance->id]);
+
+        $groupone = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $grouptwo = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+
+        $studentingroupone = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($studentingroupone->id, $course->id, 'student');
+        $this->getDataGenerator()->create_group_member(['groupid' => $groupone->id, 'userid' => $studentingroupone->id]);
+
+        $studeningrouptwo = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($studeningrouptwo->id, $course->id, 'student');
+        $this->getDataGenerator()->create_group_member(['groupid' => $grouptwo->id, 'userid' => $studeningrouptwo->id]);
+
+        $teacher = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($teacher->id, $course->id, 'teacher');
+        $this->getDataGenerator()->create_group_member(['groupid' => $groupone->id, 'userid' => $teacher->id]);
+
+        $now = time();
+        foreach ([[$studentingroupone, '[[0,10]]'], [$studeningrouptwo, '[[20,30]]']] as [$student, $segments]) {
+            $DB->insert_record('playervideo_progress', (object) [
+                'playervideoid' => $instance->id, 'userid' => $student->id, 'lastposition' => 0,
+                'watchedpct' => 0, 'watchedtoend' => 0, 'segments' => $segments,
+                'timecreated' => $now, 'timemodified' => $now,
+            ]);
+        }
+
+        $this->setUser($teacher);
+        $result = $this->call(['playervideoid' => $instance->id]);
+
+        $this->assertFalse($result['error']);
+        $buckets = $result['data']['engagement']['buckets'];
+        $this->assertEqualsWithDelta(10.0, array_sum($buckets), 0.001);
+        // Group two's [20,30] segment must contribute nothing to the totals.
+        for ($index = 20; $index < 30; $index++) {
+            $this->assertEqualsWithDelta(0.0, $buckets[$index], 0.001, "bucket $index");
+        }
     }
 }
