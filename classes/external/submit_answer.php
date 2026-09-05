@@ -38,8 +38,7 @@ use stdClass;
 /**
  * Records exactly one response per (interaction, attempt) — called once, at the moment the
  * student confirms an answer or dismisses a note; a second call for the same pair is refused,
- * which is what locks a closed interaction against being answered again in the same attempt
- * (see the plugin SCOPE, "Interações já tratadas nunca se repetem").
+ * which is what locks a closed interaction against being answered again in the same attempt.
  */
 class submit_answer extends external_api {
     /**
@@ -112,7 +111,7 @@ class submit_answer extends external_api {
         // The already-answered/already-rewarded checks below and the response insert must run
         // as one atomic sequence: without this lock, two concurrent requests for the same
         // attempt+interaction can both pass both checks before either writes, granting the
-        // PlayerHUD item twice for one correct answer (see the security audit, finding #3).
+        // PlayerHUD item twice for one correct answer.
         $lock = attempt_lock::acquire('answer_' . $attempt->id . '_' . $interaction->id);
         try {
             $alreadyanswered = $DB->record_exists('playervideo_responses', [
@@ -176,7 +175,7 @@ class submit_answer extends external_api {
                     }
                     $response->responsetext = $params['responsetext'];
                     // Not 'pending_review' yet — no AI suggestion has been generated at this
-                    // point (see generate_response_correction, Fase 4d). attempt_manager::
+                    // point (see generate_response_correction). attempt_manager::
                     // has_pending_correction() already treats both statuses as "still needs a
                     // teacher decision".
                     $response->status = 'pending_ai';

@@ -376,9 +376,8 @@ function playervideo_get_coursemodule_info(stdClass $coursemodule): cached_cm_in
 /**
  * Renders the video inline on the course page when the teacher enabled "fixar na página do
  * curso" — a purely presentational decision: the course_modules/grade_item stay intact, so
- * the activity keeps its grade and attempts normally (see the plugin SCOPE, "Vídeo fixo/
- * inline"). Only a plain embed, no interactive timeline — that only exists on the full
- * activity page (view.php).
+ * the activity keeps its grade and attempts normally. Only a plain embed, no interactive
+ * timeline — that only exists on the full activity page (view.php).
  *
  * Deliberately never calls $cm->set_no_view_link(): that nulls $cm->url globally (not just
  * on the course page card), which silently made the activity unreachable everywhere else on
@@ -535,7 +534,7 @@ function playervideo_questions_in_use(array $questionids): bool {
  *
  * Discovered automatically by core (settings_navigation::load_module_settings(), which calls
  * "{$cm->modname}_extend_settings_navigation" by name) — without this, interactions.php (the
- * timeline editor, built in Fase 3a) has no link pointing to it anywhere in the UI.
+ * timeline editor) has no link pointing to it anywhere in the UI.
  *
  * @param settings_navigation $settings The settings navigation object.
  * @param navigation_node $playervideonode The node to add children to.
@@ -560,7 +559,7 @@ function playervideo_extend_settings_navigation(
         'mod_playervideo_manageinteractions'
     );
 
-    // Fase 4d: correction queue + analytics — gated on either capability, since a custom role
+    // Correction queue + analytics link is gated on either capability, since a custom role
     // could plausibly grant only one of the two (see report.php's own per-section WS checks for
     // the real enforcement; this only controls whether the link itself appears).
     if (

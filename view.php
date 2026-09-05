@@ -167,8 +167,8 @@ if ($shouldautoshowintro) {
 
 $progress = $DB->get_record('playervideo_progress', ['playervideoid' => $instance->id, 'userid' => $userid]);
 
-// Approved DI summaries only — a still-pending one is never shown to a student (§4, "Resumo por
-// IA em leitura fácil"). Prefer the one matching the user's current language, else the first
+// Approved DI summaries only — a still-pending one is never shown to a student. Prefer the one
+// matching the user's current language, else the first
 // approved one alphabetically; embedded directly here since the page already has this data,
 // avoiding a second round-trip just to populate the summary modal on click.
 $approvedsummary = null;

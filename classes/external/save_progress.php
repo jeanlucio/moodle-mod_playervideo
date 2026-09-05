@@ -34,18 +34,18 @@ use moodle_exception;
 use stdClass;
 
 /**
- * Persists resume position and watched segments (§5, playervideo_progress).
+ * Persists resume position and watched segments (playervideo_progress).
  *
- * The optional ended flag is not part of the WS originally scoped in the SCOPE document, but was
- * added because the "watched to the end" completion rule (§4, Rule 2) needs some write path to
- * flip playervideo_progress.watchedtoend when the player's native `ended` event fires, and no
+ * The optional ended flag was not part of the WS originally, but was added because the "watched
+ * to the end" completion rule needs some write path to flip playervideo_progress.watchedtoend
+ * when the player's native `ended` event fires, and no
  * separate WS was budgeted for that single boolean — piggybacking on the same heartbeat record
  * avoids a sixth WS for one field on the same row.
  *
  * Segments reported by the client are untrusted: they are validated, clamped to the known video
- * duration and merged with the already-persisted set via segment_tracker (§16, Fase 10a) before
- * being stored — never persisted as the raw JSON the client sent, which is what happened before
- * Fase 10a and left watchedpct permanently unwritten (§5, [!WARNING]).
+ * duration and merged with the already-persisted set via segment_tracker before being stored —
+ * never persisted as the raw JSON the client sent, which is what happened previously and left
+ * watchedpct permanently unwritten.
  */
 class save_progress extends external_api {
     /**
@@ -110,7 +110,7 @@ class save_progress extends external_api {
         // The video duration is a property of the shared content, not of this student's
         // progress, so it lives on the instance itself and only ever grows: an isolated
         // heartbeat with an incompletely-resolved player duration must never shrink the
-        // divisor used to calculate everyone else's watchedpct (§5).
+        // divisor used to calculate everyone else's watchedpct.
         if ($params['duration'] > (float) $instance->duration) {
             $DB->set_field('playervideo', 'duration', $params['duration'], ['id' => $instance->id]);
             $instance->duration = $params['duration'];
@@ -162,7 +162,7 @@ class save_progress extends external_api {
     /**
      * Calculates the percentage of the effective playback window actually watched.
      *
-     * The effective window respects the activity's own trim (§4/§7, save_trim): a video cut to
+     * The effective window respects the activity's own trim (see save_trim): a video cut to
      * end before its real duration must not require watching the discarded tail to reach 100%.
      *
      * @param stdClass $instance The playervideo instance (needs duration/trimstart/trimend).

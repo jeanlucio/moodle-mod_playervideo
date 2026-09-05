@@ -37,8 +37,7 @@ use moodle_exception;
  * The only path that ever writes `teachergrade`/`teacherfeedback` — accepting the AI suggestion
  * as-is or overriding it is the same call, just with a different value. If this was the last
  * response still awaiting correction in its attempt, the attempt is recomputed and, once
- * `finished`, its grade is sent to the Gradebook (see the plugin SCOPE, "Gradebook só depois de
- * toda aberta corrigida").
+ * `finished`, its grade is sent to the Gradebook.
  */
 class review_response extends external_api {
     /**

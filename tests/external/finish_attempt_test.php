@@ -143,7 +143,7 @@ final class finish_attempt_test extends \advanced_testcase {
 
     /**
      * Tests that an attempt with a pending open-question response is withheld from the
-     * Gradebook — mirroring mod_quiz's own behaviour (see the plugin SCOPE).
+     * Gradebook — mirroring mod_quiz's own behaviour.
      *
      * @return void
      */

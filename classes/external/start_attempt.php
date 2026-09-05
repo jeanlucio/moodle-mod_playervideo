@@ -74,7 +74,7 @@ class start_attempt extends external_api {
         // The can_start_new_attempt() check and the attempt insert below must run as one atomic
         // sequence: without this lock, two concurrent requests can both see attemptcount <
         // maxattempts before either writes, letting the student open more attempts than the
-        // teacher configured (see the security audit, finding #3).
+        // teacher configured.
         $lock = attempt_lock::acquire('start_' . $instance->id . '_' . $userid);
         try {
             $attempt = attempt_manager::get_open_attempt($instance->id, $userid);

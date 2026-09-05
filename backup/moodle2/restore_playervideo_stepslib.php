@@ -107,7 +107,7 @@ class restore_playervideo_activity_structure_step extends restore_activity_struc
 
     /**
      * Resolves a backed-up question id, for a plugin that references questions directly rather
-     * than through the Question Usage API (see the plugin SCOPE, "Blind JSON").
+     * than through the Question Usage API.
      *
      * Tries, in order: (1) the 'question_created' mapping, core's own namespace, populated only
      * when the question was actually part of this backup's question-bank scope (its category
@@ -374,8 +374,9 @@ class restore_playervideo_activity_structure_step extends restore_activity_struc
     /**
      * Restores files from every file area this activity owns: the intro editor field, an
      * uploaded HTML5 video, and a cover image. videofile was a real, pre-existing gap here
-     * (present since Fase 2, only found while adding posterimage in Fase 9) — restored now
-     * alongside it, both following annotate_files()'s matching call in the backup step.
+     * (present since videofile support was added, only found while adding posterimage support
+     * later) — restored now alongside it, both following annotate_files()'s matching call in
+     * the backup step.
      *
      * The grade item itself is not touched here: restore_activity_grades_structure_step (added
      * generically by restore_activity_task for every gradable module) already restores it.

@@ -33,7 +33,7 @@ use context;
  *
  * Deliberately holds no prompt-building or response-parsing logic of its own: each caller owns
  * its own prompt and is responsible for treating the returned text as untrusted (validating
- * structure/JSON before using it), per the AI features rules in the project's CLAUDE.md. Mirrors
+ * structure/JSON before using it). Mirrors
  * the routing half of {@see \mod_playerwords\local\ai_word_generator}, generalised because this
  * plugin has more than one AI task instead of just one.
  */

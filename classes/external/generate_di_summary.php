@@ -38,8 +38,7 @@ use moodle_exception;
  * Generates an easy-read summary, in the style of "Information for All"/"Informação para Todos"
  * plain-language guidelines, from an existing caption's text — for students with intellectual
  * disability (DI). The result always starts pending: it is never shown to a student until a
- * teacher reviews and approves it via {@see save_di_summary} (see the plugin SCOPE, "Resumo por
- * IA em leitura fácil").
+ * teacher reviews and approves it via {@see save_di_summary}.
  */
 class generate_di_summary extends external_api {
     /**

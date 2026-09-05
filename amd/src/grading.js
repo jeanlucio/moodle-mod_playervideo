@@ -16,7 +16,7 @@
 /**
  * Correction queue: lists open-question responses awaiting a grade, offers an AI suggestion on
  * demand, and lets the teacher confirm (as-is or edited) via review_response — humano sempre no
- * loop, never an automatic grade (see the plugin SCOPE, "Correção assistida por IA").
+ * loop, never an automatic grade.
  *
  * @module     mod_playervideo/grading
  * @copyright  2026 Jean Lúcio
@@ -207,7 +207,7 @@ const applySuggestion = async(response, result, aisuggestionlabel) => {
  * no AI suggestion yet — spares the teacher from clicking "Generate" once per response. Requests
  * run one at a time (never in parallel): a real AI provider's own per-minute token limit can
  * reject a burst of simultaneous calls, and one failure must never stop the rest of the batch —
- * same principle already applied to the batch question generator (Fase 4a).
+ * same principle already applied to the batch question generator.
  *
  * @param {Array} pending The full pending queue, as returned by get_pending_corrections.
  * @returns {Promise<HTMLElement|null>} The button, or null if every response already has one.

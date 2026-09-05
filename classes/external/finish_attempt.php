@@ -35,8 +35,7 @@ use moodle_exception;
 /**
  * Closes an attempt: if no open question is left pending correction, computes the attempt's
  * grade and aggregates the student's final activity grade to the Gradebook (mirroring mod_quiz,
- * which withholds any grade while manual marking is outstanding — see the plugin SCOPE,
- * "Gradebook só depois de toda aberta corrigida").
+ * which withholds any grade while manual marking is outstanding).
  */
 class finish_attempt extends external_api {
     /**

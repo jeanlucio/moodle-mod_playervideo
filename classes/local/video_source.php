@@ -30,8 +30,8 @@ use moodle_url;
  * Turns a stored videotype/videourl pair into an embed URL.
  *
  * Only resolves the plain embed src — the interactive player itself (IFrame/Player.js API,
- * anti-skip, captions) is AMD work for the full activity view (see the plugin SCOPE, §16
- * Phase 3). This class only serves the simple inline embed used by cm_info_dynamic() when
+ * anti-skip, captions) is AMD work for the full activity view. This class only serves the
+ * simple inline embed used by cm_info_dynamic() when
  * the teacher pins the video to the course page.
  */
 class video_source {

@@ -188,7 +188,7 @@ final class get_pending_corrections_test extends \advanced_testcase {
     }
 
     /**
-     * Regression test for the separate-groups leak (security audit finding #4): a non-editing
+     * Regression test for the separate-groups leak: a non-editing
      * teacher restricted to one group, with no moodle/site:accessallgroups, must not see a
      * pending open-question response from a student in a different group.
      *

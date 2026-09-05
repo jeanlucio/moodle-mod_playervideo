@@ -191,7 +191,7 @@ final class get_report_test extends \advanced_testcase {
     }
 
     /**
-     * Tests that the class-wide engagement timeline (Fase 10b) sums watched seconds across every
+     * Tests that the class-wide engagement timeline sums watched seconds across every
      * eligible student's already-normalised segments, without exposing a per-student breakdown.
      *
      * @return void
@@ -231,7 +231,7 @@ final class get_report_test extends \advanced_testcase {
     }
 
     /**
-     * Regression test for the separate-groups leak (security audit finding #4): a non-editing
+     * Regression test for the separate-groups leak: a non-editing
      * teacher restricted to one group, with no moodle/site:accessallgroups, must not see a
      * student from a different group in the per-student aggregate — even though
      * mod/playervideo:viewreports itself is not group-scoped.
@@ -258,7 +258,7 @@ final class get_report_test extends \advanced_testcase {
 
         $teacher = $this->getDataGenerator()->create_user();
         // Non-editing 'teacher' archetype: has mod/playervideo:viewreports by default, but not
-        // moodle/site:accessallgroups — exactly the gap the audit's PoC exercises.
+        // moodle/site:accessallgroups — exactly the gap this regression test exercises.
         $this->getDataGenerator()->enrol_user($teacher->id, $course->id, 'teacher');
         $this->getDataGenerator()->create_group_member(['groupid' => $groupone->id, 'userid' => $teacher->id]);
 
@@ -281,7 +281,7 @@ final class get_report_test extends \advanced_testcase {
     }
 
     /**
-     * Tests that the engagement timeline (Fase 10b) respects the same group restriction as the
+     * Tests that the engagement timeline respects the same group restriction as the
      * per-student aggregate — a group-restricted teacher must never see another group's watched
      * seconds folded into the class-wide totals.
      *

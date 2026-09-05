@@ -260,7 +260,7 @@ final class review_response_test extends \advanced_testcase {
     }
 
     /**
-     * Regression test for the separate-groups leak (security audit finding #4): a non-editing
+     * Regression test for the separate-groups leak: a non-editing
      * teacher restricted to one group, with no moodle/site:accessallgroups, must not be able to
      * grade a response from a student in a different group, even with a responseid they already
      * know (e.g. from another channel) — mod/playervideo:reviewresponses alone is not enough.

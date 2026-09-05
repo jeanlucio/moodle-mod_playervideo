@@ -128,7 +128,7 @@ final class start_attempt_test extends \advanced_testcase {
 
     /**
      * Tests that the already-treated interactions of the resumed attempt are reported back,
-     * so the player never pauses on them again (see the plugin SCOPE).
+     * so the player never pauses on them again.
      *
      * @return void
      */
@@ -237,7 +237,7 @@ final class start_attempt_test extends \advanced_testcase {
     }
 
     /**
-     * Regression test for the maxattempts race (security audit finding #3): a second,
+     * Regression test for the maxattempts race: a second,
      * genuinely concurrent request for the same instance+student must be refused outright by
      * the attempt_lock, instead of being allowed to re-run can_start_new_attempt() and create
      * an attempt past the configured limit. Simulates concurrency with a second, independent

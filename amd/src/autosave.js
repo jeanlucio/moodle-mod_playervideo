@@ -16,9 +16,9 @@
 /**
  * Resilient auto-save: wraps a mod_playervideo Web Service call so a genuine network failure
  * (not a server-side validation error) is queued in localStorage and retried automatically on
- * the next 'online' event or page load, instead of silently losing the response/heartbeat (see
- * the plugin SCOPE, "Resiliência a queda de conexão" — the localStorage-retry half of it; the
- * sendBeacon-on-close half is deferred, see the SCOPE decision log).
+ * the next 'online' event or page load, instead of silently losing the response/heartbeat. This
+ * covers only the localStorage-retry half of connection resilience; a sendBeacon-on-close half
+ * is not implemented here.
  *
  * @module     mod_playervideo/autosave
  * @copyright  2026 Jean Lúcio

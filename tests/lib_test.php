@@ -370,8 +370,7 @@ final class lib_test extends \advanced_testcase {
 
     /**
      * Tests that a teacher (mod/playervideo:manage) gets a "Manage interactions" node pointing
-     * at interactions.php — without this, the timeline editor built in Fase 3a has no link
-     * anywhere in the UI (found by the plugin's author after Fase 3b shipped).
+     * at interactions.php — without this, the timeline editor has no link anywhere in the UI.
      *
      * @return void
      */

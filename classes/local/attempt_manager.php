@@ -30,7 +30,7 @@ use stdClass;
 /**
  * Opens/closes attempts and aggregates the final activity grade across them.
  *
- * Grading model (see the plugin SCOPE, "Cálculo da nota da tentativa"): each attempt's own
+ * Grading model: each attempt's own
  * grade is the weighted sum of its question interactions, scaled to the instance's maximum
  * grade; the final activity grade is then aggregated across the student's finished attempts
  * according to {@see grademethod}. An attempt with an open question still pending correction is

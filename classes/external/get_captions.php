@@ -37,8 +37,8 @@ use mod_playervideo\local\caption_service;
  *
  * Used both by the teacher's caption editor (to list what already exists) and by the student
  * player (to merge with whatever native tracks the source adapter finds live) — never any
- * provider's native tracks itself, since those are never copied into the plugin's own tables
- * (see the plugin SCOPE, "Editor manual de legenda"). Read-only content authored by the
+ * provider's native tracks itself, since those are never copied into the plugin's own tables.
+ * Read-only content authored by the
  * teacher, so any enrolled user with view access may call it — never gated behind
  * mod/playervideo:manage.
  */

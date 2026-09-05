@@ -27,7 +27,7 @@ namespace mod_playervideo\local;
 /**
  * Turns every enrolled student's watched segments into a fixed number of equal-width buckets
  * spanning the activity's own playback window, computed fresh on every call — there is no table
- * of its own to keep in sync (§17 of the plugin SCOPE).
+ * of its own to keep in sync.
  *
  * The result never exposes a per-student breakdown, only totals per region of the video, the
  * same aggregation-without-identification principle already used by get_poll_results.

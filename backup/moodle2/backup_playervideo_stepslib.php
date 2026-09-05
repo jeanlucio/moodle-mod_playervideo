@@ -184,9 +184,9 @@ class backup_playervideo_activity_structure_step extends backup_activity_structu
 
         // Annotate every file area this activity owns, so the actual files travel with the
         // backup — never just the DB rows/columns that point at them. videofile was a real,
-        // pre-existing gap here (present since Fase 2, only found while adding posterimage in
-        // Fase 9): an uploaded HTML5 video was never included in a backup or "Duplicate
-        // activity" at all.
+        // pre-existing gap here (present since videofile support was added, only found while
+        // adding posterimage support later): an uploaded HTML5 video was never included in a
+        // backup or "Duplicate activity" at all.
         $playervideo->annotate_files('mod_playervideo', 'intro', null);
         $playervideo->annotate_files('mod_playervideo', 'videofile', null);
         $playervideo->annotate_files('mod_playervideo', 'posterimage', null);

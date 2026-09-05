@@ -15,7 +15,7 @@
 
 /**
  * Analytics dashboard: per-question (% correct, correction status) and per-student (attempts,
- * final grade, time watched, completion) — see the plugin SCOPE, "Analytics".
+ * final grade, time watched, completion).
  *
  * @module     mod_playervideo/report
  * @copyright  2026 Jean Lúcio
@@ -180,7 +180,7 @@ const formatBucketRange = (engagement, index) => {
 };
 
 /**
- * Renders the class-wide engagement timeline (Fase 10b): a bar per region of the playback
+ * Renders the class-wide engagement timeline: a bar per region of the playback
  * window, plus a plain-text summary of the three highlighted regions — the highlight is never
  * conveyed by colour alone, matching the plugin's own accessibility rules.
  *

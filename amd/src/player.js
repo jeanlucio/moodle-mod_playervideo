@@ -85,7 +85,7 @@ let activeManualCaption = null;
 
 /**
  * Announces a short status change to screen-reader users via the polite aria-live region,
- * without stealing visual focus (see the plugin SCOPE, a11y requirements).
+ * without stealing visual focus.
  *
  * @param {string} message Text to announce.
  */
@@ -107,7 +107,7 @@ const showScreen = (name) => {
 /**
  * Shows a business-rule error (a deliberate moodle_exception, using this plugin's own
  * error_* string convention) via a plain alert, or an unexpected one via the generic
- * AJAX-exception dialog — see the CLAUDE.md AMD rule this mirrors.
+ * AJAX-exception dialog.
  *
  * @param {object} error Rejection from Ajax.call().
  * @returns {Promise<void>}
@@ -299,8 +299,8 @@ const setCaptionSelection = (value) => {
 /**
  * Populates the caption selector with the merge of native tracks (read live from the source
  * adapter) and manually authored ones (mod_playervideo_get_captions) — never combined into one
- * stored list, each read from where it already lives (see the plugin SCOPE, "Editor manual de
- * legenda"). A source with no captions at all (e.g. HTML5) still gets the "off" option alone.
+ * stored list, each read from where it already lives. A source with no captions at all (e.g.
+ * HTML5) still gets the "off" option alone.
  *
  * @returns {Promise<void>}
  */
@@ -919,7 +919,7 @@ const confirmAnswer = async() => {
 
 /**
  * Dismisses the currently open note interaction — a single step (submit + resume), unlike a
- * question, which shows feedback before resuming (see the plugin SCOPE).
+ * question, which shows feedback before resuming.
  *
  * @returns {Promise<void>}
  */
@@ -936,7 +936,7 @@ const dismissNote = async() => {
 
 /**
  * Renders one poll option's aggregated vote bar (a per-render dynamic width, hence the inline
- * style — see the plugin CLAUDE.md rule on when inline style is acceptable).
+ * style).
  *
  * @param {object} option One option from mod_playervideo_get_poll_results.
  * @param {number} selectedid The option id the student voted for.

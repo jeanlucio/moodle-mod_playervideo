@@ -28,8 +28,7 @@ namespace mod_playervideo\local;
  * One instance's manually authored captions: parsing/normalising to VTT, and CRUD against
  * playervideo_captions. Never touches a provider's own native tracks (YouTube tracklist, Vimeo
  * text tracks) — those are read live, client-side, by the player adapters; this class only ever
- * knows about the rows the plugin itself stores (see the plugin SCOPE, "Editor manual de
- * legenda").
+ * knows about the rows the plugin itself stores.
  */
 final class caption_service {
     /** @var int Fallback cue duration, in seconds, for a cue with no following cue to bound it. */

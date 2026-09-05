@@ -33,7 +33,7 @@ use moodle_exception;
 
 /**
  * Sets playervideo.trimstart/trimend — two draggable markers on the same timeline widget
- * used for interactions (see the plugin SCOPE, "Fluxo de configuração"), but stored as plain
+ * used for interactions, but stored as plain
  * instance columns rather than interaction rows: a trim boundary is a property of the video
  * (at most one start, one end), never a repeatable list item.
  */

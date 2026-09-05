@@ -16,8 +16,7 @@
 
 /**
  * Text-only linear document alternative to the video player, for a student using a screen
- * reader — a first-class route, not an adaptation of the video screen (see the plugin SCOPE,
- * "Modo texto-only").
+ * reader — a first-class route, not an adaptation of the video screen.
  *
  * @package    mod_playervideo
  * @copyright  2026 Jean Lúcio

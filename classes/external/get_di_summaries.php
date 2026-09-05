@@ -35,7 +35,7 @@ use mod_playervideo\local\di_summary_service;
 /**
  * Returns the DI summaries of an instance — every one (any status) for a teacher, but only the
  * approved ones for anyone else, enforced server-side rather than left to the client to hide a
- * still-pending draft (see the plugin SCOPE, "Resumo por IA em leitura fácil").
+ * still-pending draft.
  */
 class get_di_summaries extends external_api {
     /**

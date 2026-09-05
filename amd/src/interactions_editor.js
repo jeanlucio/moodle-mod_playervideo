@@ -14,7 +14,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Timeline management screen (Fase 3c redesign): a real, clickable/draggable video timeline —
+ * Timeline management screen: a real, clickable/draggable video timeline —
  * markers for existing interactions, handles for the trim window — driving a docked panel that
  * alternates between a type picker and a focused editor form. Reuses the same source adapters
  * (player_youtube/vimeo/html5) the student player uses, since the timeline needs the same
@@ -95,8 +95,8 @@ const call = (methodname, args) => Ajax.call([{methodname, args}])[0];
 /**
  * Shows a business-rule error (a deliberate moodle_exception, using this plugin's own
  * error_* string convention) via a plain alert, or an unexpected one via the generic
- * AJAX-exception dialog — see the CLAUDE.md AMD rule this mirrors (and amd/src/player.js,
- * where the same helper already exists for the student-facing side).
+ * AJAX-exception dialog, mirroring the same helper in amd/src/player.js for the
+ * student-facing side.
  *
  * @param {object} error Rejection from Ajax.call().
  * @returns {Promise<void>}
@@ -219,7 +219,7 @@ const renderMarkers = () => {
 
 /**
  * Renders the accessible outline list mirroring the timeline markers — the keyboard/screen
- * reader path to the same interactions (see the plugin SCOPE, a11y requirements).
+ * reader path to the same interactions.
  */
 const renderOutline = () => {
     const list = document.getElementById('playervideo-outline-list');
@@ -567,7 +567,7 @@ const openBatchGenerateModal = async() => {
 /**
  * Saves a caption, first checking whether a manual caption already exists for that language and
  * confirming with the teacher before overwriting it — the plugin never overwrites a caption in
- * silence (see the plugin SCOPE, "Sinergia com legenda").
+ * silence.
  *
  * @param {number} playervideoid PlayerVideo instance id.
  * @param {string} lang Language code, already trimmed/lowercased.
@@ -734,8 +734,8 @@ const openCaptionsModal = async() => {
 /**
  * Opens the easy-read (DI) summary modal: pick a language that already has a caption, generate
  * a summary by AI from that caption's text, edit it, and approve it (or leave it pending) — a
- * summary is never shown to a student until approved (see the plugin SCOPE, "Resumo por IA em
- * leitura fácil"). Needs at least one caption to exist first, since generation reads from it.
+ * summary is never shown to a student until approved. Needs at least one caption to exist
+ * first, since generation reads from it.
  *
  * @returns {Promise<void>}
  */

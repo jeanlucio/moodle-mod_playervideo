@@ -28,7 +28,7 @@ namespace mod_playervideo\local;
  * CRUD for playervideo_disummaries — one AI-generated, teacher-reviewable easy-read summary per
  * language, for students with intellectual disability (DI). Always starts 'pending' after a
  * (re)generation; only a teacher's explicit approval flips it to 'approved', the only status a
- * student is ever shown (see the plugin SCOPE, "Resumo por IA em leitura fácil").
+ * student is ever shown.
  */
 final class di_summary_service {
     /** @var string Status before a teacher has approved the summary. */

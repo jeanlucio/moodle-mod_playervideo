@@ -139,7 +139,7 @@ final class save_progress_test extends \advanced_testcase {
     /**
      * Tests that watchedpct reflects only the unique seconds actually watched, merged across
      * heartbeats — not the raw client segments and not the last reported position (regression
-     * test for the gap described in the plugin SCOPE, §5, Fase 10a: watchedpct was never written).
+     * test for a real gap where watchedpct was never written).
      *
      * @return void
      */

@@ -27,9 +27,7 @@
  * video embed that cm_info_dynamic() renders on the course page itself (showinline), a page
  * whose body carries .path-course-view, never .path-mod-playervideo — a body-path selector
  * would simply never match there. Collision risk is kept low instead by qualifying the
- * selector with the two tag names it is ever applied to. See CLAUDE.md § CSS exception for
- * content rendered outside the plugin's own page; case log: moodle-lessons.md § CSS scoping —
- * content rendered outside the plugin's own page.
+ * selector with the two tag names it is ever applied to.
  */
 iframe.ph-video-embed,
 video.ph-video-embed {
@@ -61,8 +59,8 @@ video.ph-video-embed {
 }
 
 /*
- * Timeline editor (Fase 3c redesign, approved from a "Timeline Studio" mockup — see the plugin
- * SCOPE §17). Design tokens scoped to the editor only: a coral accent, indigo/amber as semantic
+ * Timeline editor, styled after a "Timeline Studio" mockup. Design tokens scoped to the editor
+ * only: a coral accent, indigo/amber as semantic
  * per-type colours (kept apart from the accent on purpose), IBM Plex for numeric labels. The
  * "stage" (video + timeline) is deliberately dark regardless of site theme — the same
  * convention every video-editing tool uses for its canvas — while the side panel stays on
@@ -232,8 +230,8 @@ video.ph-video-embed {
 }
 
 /*
- * Was already referenced (the ruler above, since before Fase 8) without ever being defined —
- * a real pre-existing gap, fixed here rather than left in place while touching this file again.
+ * Was already referenced (the ruler above) without ever being defined — a real pre-existing
+ * gap, fixed here rather than left in place while touching this file again.
  */
 .path-mod-playervideo .mono {
     font-variant-numeric: tabular-nums;
@@ -761,7 +759,7 @@ video.ph-video-embed {
 }
 
 /*
- * Class-wide engagement timeline (Fase 10b, report.php). Highlighted bars use colour as a
+ * Class-wide engagement timeline (report.php). Highlighted bars use colour as a
  * convenience only — the same three regions are always named in plain text in the summary
  * list right below the chart, never conveyed by colour alone.
  */
@@ -815,7 +813,7 @@ video.ph-video-embed {
 
 /*
  * Not scoped under .path-mod-playervideo: core/modal hoists its markup to <body> before
- * showing it (see the Bootstrap Modals convention in CLAUDE.md), breaking ancestor scope —
+ * showing it, breaking ancestor scope —
  * same exception already applied to .ph-video-embed above. The DI summary text is stored as
  * plain lines (an easy-read paragraph per idea, see di_summary_service), not FORMAT_HTML —
  * pre-line keeps each line break visible without converting the stored text to <p> tags.

@@ -208,7 +208,7 @@ final class submit_answer_test extends \advanced_testcase {
 
     /**
      * Tests that a poll option id from a different interaction is rejected, even though the
-     * row itself exists in the database (instance isolation, see the plugin SCOPE).
+     * row itself exists in the database (instance isolation).
      *
      * @return void
      */
@@ -277,7 +277,7 @@ final class submit_answer_test extends \advanced_testcase {
 
     /**
      * Tests that a second submission for the same interaction, in the same attempt, is
-     * refused — the antifraude lock described in the plugin SCOPE.
+     * refused — the antifraude lock enforced by attempt_lock.
      *
      * @return void
      */
@@ -327,7 +327,7 @@ final class submit_answer_test extends \advanced_testcase {
     }
 
     /**
-     * Regression test for the PlayerHUD double-reward race (security audit finding #3): a
+     * Regression test for the PlayerHUD double-reward race: a
      * second, genuinely concurrent request for the same attempt+interaction must be refused
      * outright by the attempt_lock, instead of being allowed to re-run the already-answered/
      * already-rewarded checks and grant the item a second time. Simulates concurrency with a

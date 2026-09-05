@@ -39,7 +39,7 @@ use mod_playervideo\local\question_service;
  * Three aggregate views, all built from batch queries (one per aggregate, never one per row in a
  * loop — see the project's own rule against `$DB` calls inside loops): per-question (% correct
  * for multichoice, correction status counts for open questions), per-student (attempts taken,
- * final grade, completion, time watched), and a class-wide engagement timeline (Fase 10b).
+ * final grade, completion, time watched), and a class-wide engagement timeline.
  */
 class get_report extends external_api {
     /**
@@ -267,7 +267,7 @@ class get_report extends external_api {
 
     /**
      * Builds the class-wide engagement timeline: how much of each region of the video was
-     * watched across every eligible student, never broken down by individual student (Fase 10b).
+     * watched across every eligible student, never broken down by individual student.
      *
      * @param int $playervideoid PlayerVideo instance id.
      * @param array $userids Eligible student ids, from eligible_students().

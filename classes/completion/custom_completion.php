@@ -27,9 +27,9 @@ namespace mod_playervideo\completion;
 use core_completion\activity_custom_completion;
 
 /**
- * The two completion rules that cover the "no grade" case (see the plugin SCOPE, "Nota
- * opcional"): completionallinteractions counts participation (answered/viewed, correctness
- * irrelevant) across any attempt; completionwatchtoend reflects the player's own native
+ * The two completion rules that cover the "no grade" case: completionallinteractions counts
+ * participation (answered/viewed, correctness irrelevant) across any attempt;
+ * completionwatchtoend reflects the player's own native
  * `ended` event, never a percentage threshold.
  */
 class custom_completion extends activity_custom_completion {

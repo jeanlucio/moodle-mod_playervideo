@@ -28,9 +28,9 @@ use context;
 
 /**
  * Merges a caption's text with the activity's interactions, in timestamp order, into one linear
- * document — text, text, question, text, ... — for a student navigating with a screen reader
- * (see the plugin SCOPE, "Modo texto-only"). A first-class alternate route (transcript.php), not
- * an adaptation of the video screen: no player, no timeline, no anti-skip, since there is no
+ * document — text, text, question, text, ... — for a student navigating with a screen reader.
+ * A first-class alternate route (transcript.php), not an adaptation of the video screen: no
+ * player, no timeline, no anti-skip, since there is no
  * video position to protect here — the student already has the full document in front of them.
  */
 final class transcript_service {

@@ -231,7 +231,7 @@ class mod_playervideo_mod_form extends moodleform_mod {
      *
      * moodleform_mod's own automatic preprocessing only ever covers the intro editor and the
      * standard grade elements — never a plugin's own custom file element. Without this
-     * override, videofile's filepicker (present since Fase 2, well before posterimage) always
+     * override, videofile's filepicker (present well before posterimage was added) always
      * rendered empty on edit, and saving the form for any unrelated reason (e.g. renaming the
      * activity) would silently wipe the previously uploaded video: file_save_draft_area_files()
      * in lib.php would synchronise the stored file to match a fresh, empty auto-generated draft

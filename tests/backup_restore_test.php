@@ -32,7 +32,7 @@ use mod_playervideo\local\question_service;
  * Tests that backup/restore (both "Duplicate activity" and a full course backup into a new
  * course) preserves PlayerVideo's data, including the questionid/answerid remap this plugin
  * must do by hand — it references the Question Bank directly rather than through the full
- * Question Usage API (see the plugin SCOPE, "Blind JSON").
+ * Question Usage API.
  *
  * @covers \backup_playervideo_activity_structure_step
  * @covers \restore_playervideo_activity_structure_step
@@ -47,8 +47,7 @@ final class backup_restore_test extends \advanced_testcase {
     /**
      * Tests that duplicating an activity completes without error and is immediately visible —
      * a regression guard for a missing prepare_activity_structure() call in the restore step,
-     * which would leave the restore's old-to-new context mapping unset (see the Backup and
-     * restore checklist item in the global CLAUDE.md).
+     * which would leave the restore's old-to-new context mapping unset.
      *
      * @return void
      */
@@ -428,8 +427,9 @@ final class backup_restore_test extends \advanced_testcase {
 
     /**
      * A full course backup/restore must carry the videofile and posterimage file areas along —
-     * a real, pre-existing gap for videofile specifically (present since Fase 2, only found
-     * while adding posterimage in Fase 9): neither annotate_files() on the backup side nor
+     * a real, pre-existing gap for videofile specifically (present since videofile support was
+     * added, only found while adding posterimage support later): neither annotate_files() on
+     * the backup side nor
      * add_related_files() on the restore side ever mentioned it, so an uploaded HTML5 video was
      * silently dropped by every backup and "Duplicate activity" before this fix.
      *

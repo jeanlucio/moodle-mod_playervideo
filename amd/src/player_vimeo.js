@@ -80,8 +80,8 @@ export const createPlayer = async(targetId, embedUrl) => {
         getDuration: () => vimeoplayer.getDuration(),
         onTimeUpdate: (callback) => vimeoplayer.on('timeupdate', (data) => callback(data.seconds)),
         onEnded: (callback) => vimeoplayer.on('ended', () => callback()),
-        // Native captions are a paid Vimeo feature (Pro/Business, videos uploaded after 05/2022,
-        // see the plugin SCOPE) — getTextTracks() legitimately resolves empty for most videos.
+        // Native captions are a paid Vimeo feature (Pro/Business, videos uploaded after 05/2022)
+        // — getTextTracks() legitimately resolves empty for most videos.
         getCaptionTracks: () => vimeoplayer.getTextTracks().then(
             (tracks) => tracks.map((track) => ({code: track.language, label: track.label || track.language}))
         ).catch(() => []),

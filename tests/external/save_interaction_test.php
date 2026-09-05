@@ -257,7 +257,7 @@ final class save_interaction_test extends \advanced_testcase {
 
     /**
      * Tests that an interaction with existing student responses cannot be deleted — the
-     * antifraude/history-preserving rule (see the plugin SCOPE).
+     * antifraude/history-preserving rule.
      *
      * @return void
      */

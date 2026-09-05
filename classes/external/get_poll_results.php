@@ -34,7 +34,7 @@ use moodle_exception;
 
 /**
  * Returns how many students voted for each option of a poll — shown to a student right after
- * confirming their own vote (see the plugin SCOPE, "Enquete"). Never identifies which student
+ * confirming their own vote. Never identifies which student
  * voted for which option, only aggregate counts, so it needs no ownership check beyond belonging
  * to the already-validated instance.
  */

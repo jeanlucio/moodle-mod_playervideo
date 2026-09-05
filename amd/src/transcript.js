@@ -17,7 +17,7 @@
  * Text-only linear document: renders the merged caption+interactions document from
  * transcript.php's data island, and drives the same attempt lifecycle (start_attempt/
  * submit_answer/finish_attempt) the video player uses — a first-class alternate route, not an
- * adaptation of the video screen (see the plugin SCOPE, "Modo texto-only").
+ * adaptation of the video screen.
  *
  * @module     mod_playervideo/transcript
  * @copyright  2026 Jean Lúcio
