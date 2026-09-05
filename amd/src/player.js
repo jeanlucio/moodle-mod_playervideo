@@ -729,6 +729,7 @@ const heartbeat = async(ended = false) => {
         attemptid: attemptId,
         lastposition: currentTime,
         segments: tracker.getSegmentsJson(),
+        duration,
         ended,
     });
 };

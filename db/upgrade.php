@@ -130,5 +130,16 @@ function xmldb_playervideo_upgrade(int $oldversion): bool {
         upgrade_mod_savepoint(true, 2026090403, 'playervideo');
     }
 
+    if ($oldversion < 2026090405) {
+        $table = new xmldb_table('playervideo');
+
+        $field = new xmldb_field('duration', XMLDB_TYPE_NUMBER, '10, 2', null, null, null, null, 'posterdescription');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026090405, 'playervideo');
+    }
+
     return true;
 }

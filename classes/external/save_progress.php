@@ -29,6 +29,7 @@ use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
+use mod_playervideo\local\segment_tracker;
 use moodle_exception;
 use stdClass;
 
@@ -40,6 +41,11 @@ use stdClass;
  * flip playervideo_progress.watchedtoend when the player's native `ended` event fires, and no
  * separate WS was budgeted for that single boolean — piggybacking on the same heartbeat record
  * avoids a sixth WS for one field on the same row.
+ *
+ * Segments reported by the client are untrusted: they are validated, clamped to the known video
+ * duration and merged with the already-persisted set via segment_tracker (§16, Fase 10a) before
+ * being stored — never persisted as the raw JSON the client sent, which is what happened before
+ * Fase 10a and left watchedpct permanently unwritten (§5, [!WARNING]).
  */
 class save_progress extends external_api {
     /**
@@ -52,6 +58,12 @@ class save_progress extends external_api {
             'attemptid' => new external_value(PARAM_INT, 'Attempt id'),
             'lastposition' => new external_value(PARAM_FLOAT, 'Current playback position, in seconds'),
             'segments' => new external_value(PARAM_RAW, 'JSON array of watched second ranges', VALUE_DEFAULT, '[]'),
+            'duration' => new external_value(
+                PARAM_FLOAT,
+                'Video duration reported by the player, in seconds (0 when not yet known)',
+                VALUE_DEFAULT,
+                0.0
+            ),
             'ended' => new external_value(PARAM_BOOL, 'Whether the native ended event just fired', VALUE_DEFAULT, false),
         ]);
     }
@@ -62,20 +74,23 @@ class save_progress extends external_api {
      * @param int $attemptid Attempt id.
      * @param float $lastposition Current playback position, in seconds.
      * @param string $segments JSON array of watched second ranges.
+     * @param float $duration Video duration reported by the player, in seconds (0 when not yet known).
      * @param bool $ended Whether the native ended event just fired.
-     * @return array Confirmation.
+     * @return array Confirmation and the newly calculated watched percentage.
      */
-    public static function execute(int $attemptid, float $lastposition, string $segments, bool $ended): array {
+    public static function execute(int $attemptid, float $lastposition, string $segments, float $duration, bool $ended): array {
         global $DB, $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'attemptid' => $attemptid,
             'lastposition' => $lastposition,
             'segments' => $segments,
+            'duration' => $duration,
             'ended' => $ended,
         ]);
 
         $attempt = $DB->get_record('playervideo_attempts', ['id' => $params['attemptid']], '*', MUST_EXIST);
+        $instance = $DB->get_record('playervideo', ['id' => $attempt->playervideoid], '*', MUST_EXIST);
 
         $cm = get_coursemodule_from_instance('playervideo', $attempt->playervideoid, 0, false, MUST_EXIST);
         $context = context_module::instance($cm->id);
@@ -86,8 +101,19 @@ class save_progress extends external_api {
             throw new moodle_exception('error_notyourattempt', 'mod_playervideo');
         }
 
-        if (json_decode($params['segments']) === null && $params['segments'] !== 'null') {
+        $incoming = json_decode($params['segments'], true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
             throw new moodle_exception('error_invalidsegments', 'mod_playervideo');
+        }
+        $incoming = is_array($incoming) ? $incoming : [];
+
+        // The video duration is a property of the shared content, not of this student's
+        // progress, so it lives on the instance itself and only ever grows: an isolated
+        // heartbeat with an incompletely-resolved player duration must never shrink the
+        // divisor used to calculate everyone else's watchedpct (§5).
+        if ($params['duration'] > (float) $instance->duration) {
+            $DB->set_field('playervideo', 'duration', $params['duration'], ['id' => $instance->id]);
+            $instance->duration = $params['duration'];
         }
 
         $now = time();
@@ -101,11 +127,16 @@ class save_progress extends external_api {
             $progress->playervideoid = $attempt->playervideoid;
             $progress->userid = $attempt->userid;
             $progress->watchedtoend = 0;
+            $progress->segments = '[]';
             $progress->timecreated = $now;
         }
 
+        $existing = json_decode((string) $progress->segments, true);
+        $merged = segment_tracker::merge(is_array($existing) ? $existing : [], $incoming, (float) $instance->duration);
+
         $progress->lastposition = $params['lastposition'];
-        $progress->segments = $params['segments'];
+        $progress->segments = json_encode($merged);
+        $progress->watchedpct = self::calculate_watched_percent($instance, $merged);
         $progress->timemodified = $now;
         if ($params['ended']) {
             $progress->watchedtoend = 1;
@@ -125,7 +156,37 @@ class save_progress extends external_api {
             }
         }
 
-        return ['ok' => true];
+        return ['ok' => true, 'watchedpct' => (float) $progress->watchedpct];
+    }
+
+    /**
+     * Calculates the percentage of the effective playback window actually watched.
+     *
+     * The effective window respects the activity's own trim (§4/§7, save_trim): a video cut to
+     * end before its real duration must not require watching the discarded tail to reach 100%.
+     *
+     * @param stdClass $instance The playervideo instance (needs duration/trimstart/trimend).
+     * @param array $segments Already-normalised [start, end] pairs.
+     * @return float Percentage from 0 to 100, rounded to two decimals.
+     */
+    private static function calculate_watched_percent(stdClass $instance, array $segments): float {
+        $windowstart = $instance->trimstart !== null ? (float) $instance->trimstart : 0.0;
+        $windowend = $instance->trimend !== null ? (float) $instance->trimend : (float) $instance->duration;
+        $windowlength = $windowend - $windowstart;
+        if ($windowlength <= 0) {
+            return 0.0;
+        }
+
+        $watched = 0.0;
+        foreach ($segments as [$start, $end]) {
+            $overlapstart = max($start, $windowstart);
+            $overlapend = min($end, $windowend);
+            if ($overlapend > $overlapstart) {
+                $watched += $overlapend - $overlapstart;
+            }
+        }
+
+        return round(min(100, ($watched / $windowlength) * 100), 2);
     }
 
     /**
@@ -136,6 +197,7 @@ class save_progress extends external_api {
     public static function execute_returns(): external_single_structure {
         return new external_single_structure([
             'ok' => new external_value(PARAM_BOOL, 'Whether the progress was saved'),
+            'watchedpct' => new external_value(PARAM_FLOAT, 'Newly calculated percentage of the video actually watched'),
         ]);
     }
 }

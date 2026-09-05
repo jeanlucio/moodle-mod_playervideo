@@ -87,7 +87,7 @@ final class save_progress_test extends \advanced_testcase {
     public function test_creates_the_progress_row(): void {
         global $DB;
 
-        $result = $this->call(['lastposition' => 42.5, 'segments' => '[[0,42.5]]']);
+        $result = $this->call(['lastposition' => 42.5, 'segments' => '[[0,42.5]]', 'duration' => 100]);
 
         $this->assertFalse($result['error']);
         $this->assertTrue($result['data']['ok']);
@@ -97,7 +97,7 @@ final class save_progress_test extends \advanced_testcase {
             'userid' => $this->student->id,
         ], '*', MUST_EXIST);
         $this->assertSame(42.5, (float) $progress->lastposition);
-        $this->assertSame('[[0,42.5]]', $progress->segments);
+        $this->assertEquals([[0.0, 42.5]], json_decode($progress->segments, true));
         $this->assertSame(0, (int) $progress->watchedtoend);
     }
 
@@ -134,6 +134,79 @@ final class save_progress_test extends \advanced_testcase {
             'playervideoid' => $this->instance->id,
             'userid' => $this->student->id,
         ]));
+    }
+
+    /**
+     * Tests that watchedpct reflects only the unique seconds actually watched, merged across
+     * heartbeats — not the raw client segments and not the last reported position (regression
+     * test for the gap described in the plugin SCOPE, §5, Fase 10a: watchedpct was never written).
+     *
+     * @return void
+     */
+    public function test_calculates_watchedpct_from_merged_segments(): void {
+        global $DB;
+
+        $this->call(['lastposition' => 60, 'segments' => '[[0,60]]', 'duration' => 600]);
+        $result = $this->call(['lastposition' => 600, 'segments' => '[[0,60],[480,600]]', 'duration' => 600]);
+
+        $this->assertFalse($result['error']);
+        $this->assertEqualsWithDelta(30.0, $result['data']['watchedpct'], 0.01);
+        $this->assertEqualsWithDelta(30.0, (float) $DB->get_field('playervideo_progress', 'watchedpct', [
+            'playervideoid' => $this->instance->id,
+            'userid' => $this->student->id,
+        ]), 0.01);
+        $this->assertEqualsWithDelta(600.0, (float) $DB->get_field('playervideo', 'duration', [
+            'id' => $this->instance->id,
+        ]), 0.01);
+    }
+
+    /**
+     * Tests that a heartbeat reporting a smaller duration than already known never shrinks the
+     * stored instance duration — an isolated player metadata glitch must not skew watchedpct for
+     * every other student watching the same video.
+     *
+     * @return void
+     */
+    public function test_duration_never_decreases(): void {
+        global $DB;
+
+        $this->call(['lastposition' => 10, 'duration' => 600]);
+        $this->call(['lastposition' => 20, 'duration' => 300]);
+
+        $this->assertEqualsWithDelta(600.0, (float) $DB->get_field('playervideo', 'duration', [
+            'id' => $this->instance->id,
+        ]), 0.01);
+    }
+
+    /**
+     * Tests that watchedpct is relative to the activity's own trim window, not the raw video
+     * duration — a video cut to end before its real length must not require watching the
+     * discarded tail to reach 100%.
+     *
+     * @return void
+     */
+    public function test_watchedpct_respects_trim_window(): void {
+        global $DB;
+
+        $DB->set_field('playervideo', 'trimstart', 100, ['id' => $this->instance->id]);
+        $DB->set_field('playervideo', 'trimend', 500, ['id' => $this->instance->id]);
+
+        $result = $this->call(['lastposition' => 600, 'segments' => '[[0,600]]', 'duration' => 600]);
+
+        $this->assertEqualsWithDelta(100.0, $result['data']['watchedpct'], 0.01);
+    }
+
+    /**
+     * Tests that a malformed interval (end before start) is silently dropped, never persisted
+     * and never inflates watchedpct — the server no longer trusts client-reported ranges as-is.
+     *
+     * @return void
+     */
+    public function test_invalid_interval_is_dropped(): void {
+        $result = $this->call(['lastposition' => 5, 'segments' => '[[50,10]]', 'duration' => 600]);
+
+        $this->assertFalse($result['error']);
+        $this->assertEqualsWithDelta(0.0, $result['data']['watchedpct'], 0.01);
     }
 
     /**
