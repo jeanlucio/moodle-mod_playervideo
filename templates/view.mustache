@@ -24,9 +24,12 @@
     scrubbable right away; the attempt itself is only opened on the student's first play click
     (amd/src/player.js). showplayer (canattempt AND canstart, computed server-side) decides
     whether the player screen renders at all; when it does not, the poster image (if any) is
-    shown as a plain static image in the info panel instead of as the video overlay. The full
-    interactions/embed data set is passed separately, via a hidden application/json data
-    island (see lib/data-passing conventions), not through this context.
+    shown as a plain static image in the info panel instead of as the video overlay. Question/
+    note/poll interactions pause the video and render centered over it (#playervideo-curtain +
+    #playervideo-interaction-overlay), with the streak chip and PlayerHUD reward toast floating
+    in the video's own corners — entirely JS-driven (player.js), nothing server-rendered here.
+    The full interactions/embed data set is passed separately, via a hidden application/json
+    data island (see lib/data-passing conventions), not through this context.
 
     Example context (json):
     {
@@ -99,6 +102,22 @@
                     id="playervideo-poster">
                 {{/hasposter}}
                 <div id="playervideo-caption-overlay" class="playervideo-caption-overlay" hidden></div>
+                <div id="playervideo-streak" class="playervideo-streak" hidden>
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 2c-.3 3-2 4.6-3.6 6.3C6.8 10 5.5 12 5.5 14.5 5.5 19.2 8.4 22 12 22s6.5-2.8 6.5-7.5c0-2-.9-3.5-1.8-4.8-.2 1.6-1.1 2.6-2.1 2.6-1.3 0-1.9-1-1.7-2.3.3-2.1-.2-4.3-2.4-6a.5.5 0 0 0-.5.4Z"/>
+                    </svg>
+                    <span id="playervideo-streak-count"></span>
+                </div>
+                <div id="playervideo-reward" class="playervideo-reward" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                        <circle cx="12" cy="12" r="8.5"/>
+                        <path d="M12 8v8M9.2 10.1c0-1.3 1.2-2.1 2.8-2.1s2.6.8 2.6 1.9c0 2.6-5.4 1.6-5.4 4.3 0 1.2 1.2 2 2.8 2s2.9-.8 2.9-2.1"/>
+                    </svg>
+                    <span id="playervideo-reward-text"></span>
+                </div>
+                <div id="playervideo-curtain" class="playervideo-curtain" hidden>
+                    <div id="playervideo-interaction-overlay" class="playervideo-overlay-card"></div>
+                </div>
             </div>
             <div class="playervideo-timeline-wrap">
                 <div class="playervideo-timeline-spacer" aria-hidden="true"></div>
@@ -162,7 +181,6 @@
         <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="playervideo-finish-btn" hidden>
             {{#str}}finishattempt, mod_playervideo{{/str}}
         </button>
-        <div id="playervideo-interaction-overlay" class="card" hidden></div>
         <div id="playervideo-review-overlay" class="card" hidden></div>
     </div>
 

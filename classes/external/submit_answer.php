@@ -195,9 +195,11 @@ class submit_answer extends external_api {
 
             $DB->insert_record('playervideo_responses', $response);
 
+            $hudrewardname = null;
             if ($shouldreward) {
                 $blockinstanceid = hud_service::resolve_block_instance_id($instance);
                 hud_service::grant_items($blockinstanceid, $attempt->userid, (int) $instance->hudcorrectitem, 1);
+                $hudrewardname = hud_service::get_item_name($blockinstanceid, (int) $instance->hudcorrectitem);
             }
         } finally {
             $lock->release();
@@ -212,6 +214,8 @@ class submit_answer extends external_api {
         return [
             'iscorrect' => $iscorrect,
             'status' => $response->status,
+            'hudrewarded' => $shouldreward,
+            'hudrewardname' => $hudrewardname,
         ];
     }
 
@@ -230,6 +234,14 @@ class submit_answer extends external_api {
                 NULL_ALLOWED
             ),
             'status' => new external_value(PARAM_ALPHANUMEXT, 'answered | viewed | voted | pending_ai'),
+            'hudrewarded' => new external_value(PARAM_BOOL, 'Whether this answer just granted a PlayerHUD item'),
+            'hudrewardname' => new external_value(
+                PARAM_TEXT,
+                'Display name of the granted PlayerHUD item, absent when hudrewarded is false',
+                VALUE_OPTIONAL,
+                null,
+                NULL_ALLOWED
+            ),
         ]);
     }
 }

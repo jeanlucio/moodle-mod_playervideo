@@ -84,6 +84,54 @@ let seekUnrestricted = false;
 let reviewing = false;
 
 /**
+ * @var {number} Consecutive correct answers in the current attempt, reset on any incorrect one.
+ * Purely a client-side motivational touch (the streak chip) — never persisted server-side,
+ * resets on every page load like the rest of the in-memory attempt state.
+ */
+let streakCount = 0;
+
+/**
+ * @var {?number} Pending timeout id hiding the PlayerHUD reward toast, so a second reward in
+ * quick succession restarts the same timer instead of stacking two.
+ */
+let rewardTimer = null;
+
+/**
+ * @var {object} Small inline icon per interaction/result type, used by overlayKicker() and the
+ * bigger result header in showAnswerFeedback() — currentColor-based so the CSS accent variable
+ * (set by setOverlayAccent()) colours them without any per-icon markup.
+ */
+const OVERLAY_ICONS = {
+    question: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' +
+        '<path d="M9.5 9a2.5 2.5 0 1 1 3.6 2.25c-1 .55-1.6 1.15-1.6 2.25"/>' +
+        '<circle cx="11.5" cy="16.7" r="0.6" fill="currentColor" stroke="none"/></svg>',
+    note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' +
+        '<path d="M12 3v9M8 8l4-5 4 5"/><path d="M5 13c0 3.9 3.1 7 7 7s7-3.1 7-7"/></svg>',
+    poll: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' +
+        '<path d="M5 19V10M12 19V5M19 19v-7"/></svg>',
+    correct: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+        '<path d="M5 12.5 9.5 17 19 7"/></svg>',
+    incorrect: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+        '<path d="M6 6l12 12M18 6 6 18"/></svg>',
+    pending: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">' +
+        '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+};
+
+/**
+ * @var {object} [accent colour, dim background] CSS values per interaction/result type, applied
+ * to #playervideo-interaction-overlay by setOverlayAccent() — the same palette the timeline
+ * editor already uses for question/note/poll (Fase 3c), plus success/danger for feedback and
+ * note's own amber reused for "pending" (offline queue or awaiting human/AI correction).
+ */
+const OVERLAY_ACCENTS = {
+    question: ['var(--pv-question, #3e5c9a)', 'rgb(62 92 154 / 20%)'],
+    note: ['var(--pv-note, #c98a2c)', 'rgb(201 138 44 / 18%)'],
+    poll: ['var(--pv-poll, #4a8f6b)', 'rgb(74 143 107 / 20%)'],
+    success: ['var(--pv-success, #3fb37f)', 'rgb(69 192 138 / 16%)'],
+    danger: ['var(--pv-danger, #d1554c)', 'rgb(224 104 95 / 16%)'],
+};
+
+/**
  * @var {Array} Manually authored captions for this instance, parsed once when the player loads
  * — each entry shaped {lang, cues: [{start, end, text}, ...]}.
  */
@@ -201,8 +249,113 @@ const renderMarkers = () => {
         const marker = document.createElement('div');
         marker.className = `playervideo-marker playervideo-marker-readonly playervideo-marker-${interaction.type}`;
         marker.style.left = `${percentForTime(interaction.timestamp)}%`;
+        marker.dataset.interactionId = interaction.id;
         container.appendChild(marker);
     });
+};
+
+/**
+ * Highlights the timeline marker for the interaction currently paused on, clearing any other
+ * — mirrors the timeline editor's own .active ring, plus a pulse (see styles.css) scoped to
+ * .playervideo-marker-readonly so the editor's own (non-pulsing) active state is untouched.
+ *
+ * @param {number} interactionid Interaction id to highlight, or null to clear.
+ */
+const setActiveMarker = (interactionid) => {
+    document.querySelectorAll('.playervideo-marker-readonly').forEach((marker) => {
+        marker.classList.toggle('active', Number(marker.dataset.interactionId) === interactionid);
+    });
+};
+
+/**
+ * Fades the interaction overlay's dimmed backdrop in over the video. Split from the curtain's
+ * `hidden` attribute (removed first, on its own) so the opacity transition actually plays —
+ * toggling `hidden` and adding the transition class in the same frame would just snap.
+ */
+const showCurtain = () => {
+    const curtain = document.getElementById('playervideo-curtain');
+    curtain.hidden = false;
+    void curtain.offsetWidth;
+    curtain.classList.add('is-open');
+};
+
+/**
+ * Hides the interaction overlay's backdrop. No fade-out on purpose: the student just pressed
+ * "Continue", and the video should resume immediately, not wait out a transition.
+ */
+const hideCurtain = () => {
+    const curtain = document.getElementById('playervideo-curtain');
+    curtain.classList.remove('is-open');
+    curtain.hidden = true;
+};
+
+/**
+ * Sets the interaction overlay's accent colour (border, kicker, icon badge, radio ring) for the
+ * given interaction/result type, via the two CSS custom properties styles.css keys off.
+ *
+ * @param {string} type One of question|note|poll|success|danger, see OVERLAY_ACCENTS.
+ */
+const setOverlayAccent = (type) => {
+    const overlay = document.getElementById('playervideo-interaction-overlay');
+    const [accent, accentDim] = OVERLAY_ACCENTS[type];
+    overlay.style.setProperty('--pv-accent', accent);
+    overlay.style.setProperty('--pv-accent-dim', accentDim);
+};
+
+/**
+ * Builds the small icon+label row at the top of a live interaction card (question/note/poll —
+ * the bigger result header in showAnswerFeedback() has its own markup, no kicker).
+ *
+ * @param {string} iconkey Key into OVERLAY_ICONS.
+ * @param {string} label Already-translated type label (e.g. from the typequestion string).
+ * @returns {string} HTML for the kicker row.
+ */
+const overlayKicker = (iconkey, label) => `
+    <div class="playervideo-overlay-kicker">
+        <span class="playervideo-overlay-badge">${OVERLAY_ICONS[iconkey]}</span>${label}
+    </div>
+`;
+
+/**
+ * Updates the streak chip after a question is graded — increments and shows it on a correct
+ * answer, hides it again as soon as the streak breaks. Left untouched while the outcome isn't
+ * known yet (queued offline), since showing a streak change on a guess would be misleading.
+ *
+ * @param {boolean|null} iscorrect True/false for a graded question, null while still pending.
+ * @returns {Promise<void>}
+ */
+const updateStreak = async(iscorrect) => {
+    if (iscorrect === null) {
+        return;
+    }
+    streakCount = iscorrect ? streakCount + 1 : 0;
+    const chip = document.getElementById('playervideo-streak');
+    if (streakCount === 0) {
+        chip.hidden = true;
+        return;
+    }
+    document.getElementById('playervideo-streak-count').textContent =
+        await getString('streaklabel', 'mod_playervideo', streakCount);
+    chip.hidden = false;
+};
+
+/**
+ * Pops the PlayerHUD reward toast for a couple of seconds — only ever called when the server's
+ * own submit_answer response reports hudrewarded, never speculatively from the client.
+ *
+ * @param {string} itemname Display name of the granted item (hud_service::get_item_name()).
+ * @returns {Promise<void>}
+ */
+const showReward = async(itemname) => {
+    const toast = document.getElementById('playervideo-reward');
+    document.getElementById('playervideo-reward-text').textContent =
+        await getString('rewardgranted', 'mod_playervideo', itemname);
+    toast.hidden = false;
+    toast.classList.remove('is-shown');
+    void toast.offsetWidth;
+    toast.classList.add('is-shown');
+    window.clearTimeout(rewardTimer);
+    rewardTimer = window.setTimeout(() => toast.classList.remove('is-shown'), 2600);
 };
 
 /**
@@ -875,8 +1028,9 @@ const buildAnswerInput = (question, container) => {
  * returning focus to the video.
  */
 const resumeAfterInteraction = () => {
-    document.getElementById('playervideo-interaction-overlay').hidden = true;
+    hideCurtain();
     document.getElementById('playervideo-interaction-overlay').innerHTML = '';
+    setActiveMarker(null);
     currentInteraction = null;
     document.getElementById('playervideo-target').focus?.();
     adapter.play();
@@ -884,7 +1038,9 @@ const resumeAfterInteraction = () => {
 };
 
 /**
- * Shows the confirmed-answer feedback (or the queued-for-sync notice), then a Continue button.
+ * Shows the confirmed-answer feedback (or the queued-for-sync notice), then a Continue button —
+ * plus, on a correct answer, the streak chip and (when submit_answer actually granted one) the
+ * PlayerHUD reward toast.
  *
  * @param {object|null} result submit_answer() result, or null if queued for later retry.
  * @returns {Promise<void>}
@@ -892,29 +1048,45 @@ const resumeAfterInteraction = () => {
 const showAnswerFeedback = async(result) => {
     const overlay = document.getElementById('playervideo-interaction-overlay');
     let resultlabel;
-    let resultclass;
+    let accenttype;
+    let iconkey;
     if (result === null) {
         resultlabel = await getString('result_pending', 'mod_playervideo');
-        resultclass = 'badge-secondary';
+        accenttype = 'note';
+        iconkey = 'pending';
     } else if (result.iscorrect === true) {
         resultlabel = await getString('result_correct', 'mod_playervideo');
-        resultclass = 'badge-success';
+        accenttype = 'success';
+        iconkey = 'correct';
     } else if (result.iscorrect === false) {
         resultlabel = await getString('result_incorrect', 'mod_playervideo');
-        resultclass = 'badge-danger';
+        accenttype = 'danger';
+        iconkey = 'incorrect';
     } else {
         resultlabel = await getString('result_pending', 'mod_playervideo');
-        resultclass = 'badge-warning';
+        accenttype = 'note';
+        iconkey = 'pending';
     }
 
     const continuestr = await getString('continuewatching', 'mod_playervideo');
     overlay.innerHTML = `
-        <div class="card-body">
-            <p><span class="badge ${resultclass}">${resultlabel}</span></p>
-            <button type="button" class="btn btn-primary" id="playervideo-overlay-continue">${continuestr}</button>
+        <div class="playervideo-overlay-result">
+            <span class="playervideo-overlay-badge">${OVERLAY_ICONS[iconkey]}</span>
+            <h4>${resultlabel}</h4>
         </div>
+        <button type="button" class="btn btn-primary" id="playervideo-overlay-continue">${continuestr}</button>
     `;
-    announce(resultlabel);
+    setOverlayAccent(accenttype);
+
+    await updateStreak(result ? result.iscorrect : null);
+
+    let announcement = resultlabel;
+    if (result && result.hudrewarded && result.hudrewardname) {
+        await showReward(result.hudrewardname);
+        announcement += ` ${await getString('rewardgranted', 'mod_playervideo', result.hudrewardname)}`;
+    }
+
+    announce(announcement);
     overlay.querySelector('#playervideo-overlay-continue').addEventListener('click', resumeAfterInteraction);
     overlay.querySelector('button').focus();
 };
@@ -1003,11 +1175,11 @@ const showPollFeedback = async(selectedid) => {
         resultshtml = '';
     }
     overlay.innerHTML = `
-        <div class="card-body">
-            ${resultshtml}
-            <button type="button" class="btn btn-primary mt-2" id="playervideo-overlay-continue">${continuestr}</button>
-        </div>
+        ${overlayKicker('poll', await getString('typepoll', 'mod_playervideo'))}
+        ${resultshtml}
+        <button type="button" class="btn btn-primary mt-2" id="playervideo-overlay-continue">${continuestr}</button>
     `;
+    setOverlayAccent('poll');
     announce(await getString('typepoll', 'mod_playervideo'));
     overlay.querySelector('#playervideo-overlay-continue').addEventListener('click', resumeAfterInteraction);
     overlay.querySelector('button').focus();
@@ -1053,17 +1225,16 @@ const pauseForInteraction = async(interaction) => {
     if (interaction.type === 'note') {
         const continuestr = await getString('continuewatching', 'mod_playervideo');
         overlay.innerHTML = `
-            <div class="card-body">
-                <div id="playervideo-note-body">${interaction.notetext}</div>
-                <button type="button" class="btn btn-primary" id="playervideo-overlay-continue">${continuestr}</button>
-            </div>
+            ${overlayKicker('note', await getString('typenote', 'mod_playervideo'))}
+            <div id="playervideo-note-body">${interaction.notetext}</div>
+            <button type="button" class="btn btn-primary" id="playervideo-overlay-continue">${continuestr}</button>
         `;
+        setOverlayAccent('note');
         overlay.querySelector('#playervideo-overlay-continue').addEventListener('click', dismissNote);
         announce(await getString('typenote', 'mod_playervideo'));
     } else if (interaction.type === 'poll') {
         const confirmstr = await getString('confirmanswer', 'mod_playervideo');
         const body = document.createElement('div');
-        body.className = 'card-body';
         const prompt = document.createElement('div');
         prompt.innerHTML = interaction.notetext;
         body.appendChild(prompt);
@@ -1090,13 +1261,13 @@ const pauseForInteraction = async(interaction) => {
         confirmbutton.addEventListener('click', submitPollVote);
         body.appendChild(confirmbutton);
 
-        overlay.innerHTML = '';
+        overlay.innerHTML = overlayKicker('poll', await getString('typepoll', 'mod_playervideo'));
         overlay.appendChild(body);
+        setOverlayAccent('poll');
         announce(await getString('typepoll', 'mod_playervideo'));
     } else {
         const confirmstr = await getString('confirmanswer', 'mod_playervideo');
         const body = document.createElement('div');
-        body.className = 'card-body';
         const questiontext = document.createElement('div');
         questiontext.innerHTML = interaction.question.text;
         body.appendChild(questiontext);
@@ -1114,12 +1285,14 @@ const pauseForInteraction = async(interaction) => {
         confirmbutton.addEventListener('click', confirmAnswer);
         body.appendChild(confirmbutton);
 
-        overlay.innerHTML = '';
+        overlay.innerHTML = overlayKicker('question', await getString('typequestion', 'mod_playervideo'));
         overlay.appendChild(body);
+        setOverlayAccent('question');
         announce(await getString('typequestion', 'mod_playervideo'));
     }
 
-    overlay.hidden = false;
+    setActiveMarker(interaction.id);
+    showCurtain();
     overlay.querySelector('input, textarea, button')?.focus();
 };
 

@@ -256,6 +256,9 @@ final class submit_answer_test extends \advanced_testcase {
         $this->assertFalse($result['error']);
         $this->assertTrue($result['data']['iscorrect']);
         $this->assertSame('answered', $result['data']['status']);
+        // No hudcorrectitem configured on this instance — nothing to grant or announce.
+        $this->assertFalse($result['data']['hudrewarded']);
+        $this->assertNull($result['data']['hudrewardname']);
     }
 
     /**
@@ -273,6 +276,42 @@ final class submit_answer_test extends \advanced_testcase {
 
         $this->assertFalse($result['error']);
         $this->assertFalse($result['data']['iscorrect']);
+        $this->assertFalse($result['data']['hudrewarded']);
+    }
+
+    /**
+     * Tests that a correct answer on an instance with a configured hudcorrectitem is reported
+     * back as rewarded, with the item's real display name — the overlay's reward toast (Fase
+     * 11) needs both to show "+1 <name>" instead of a placeholder.
+     *
+     * @return void
+     */
+    public function test_reports_hud_reward_on_a_correct_answer(): void {
+        global $DB;
+
+        $DB->set_field('playervideo', 'hudcorrectitem', 999, ['id' => $this->instance->id]);
+        $fixture = $this->make_truefalse_interaction();
+
+        $result = $this->call([
+            'interactionid' => $fixture['interactionid'],
+            'answerid' => $fixture['correctanswerid'],
+        ]);
+
+        $this->assertFalse($result['error']);
+        $this->assertTrue($result['data']['hudrewarded']);
+        // The block_playerhud plugin is not installed in this test environment, so the real
+        // display name degrades to an empty string (hud_service::get_item_name()) rather than
+        // erroring — the assertion that matters here is that hudrewarded/hudrewardname are
+        // always present together, never one without the other.
+        $this->assertSame('', $result['data']['hudrewardname']);
+
+        $response = $DB->get_record(
+            'playervideo_responses',
+            ['interactionid' => $fixture['interactionid']],
+            '*',
+            MUST_EXIST
+        );
+        $this->assertSame(1, (int) $response->hudrewarded);
     }
 
     /**

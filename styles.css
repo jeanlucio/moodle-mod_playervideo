@@ -172,6 +172,268 @@ video.ph-video-embed {
     pointer-events: none;
 }
 
+/*
+ * Interaction overlay (question/note/poll): sits on top of the paused video instead of the
+ * plain Bootstrap card the player used below the stage before Fase 11, in the spirit of H5P
+ * Interactive Video — approved from the "PlayerVideo Overlay" prototype (SCOPE §17/§18). The
+ * curtain is the dimmed backdrop; the card itself borrows the same dark ink surface and coral/
+ * question/note/poll palette the timeline editor already defined (Fase 3c), never a new one.
+ * Review mode (interaction_review.mustache) deliberately keeps the old plain-card treatment —
+ * a retrospective read, not a live pause, so plain text stays the more accessible choice there.
+ */
+.path-mod-playervideo .playervideo-curtain {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem;
+    background: rgb(13 15 19 / 0%);
+    opacity: 0;
+    transition: opacity 0.28s ease, background 0.28s ease;
+}
+
+.path-mod-playervideo .playervideo-curtain.is-open {
+    opacity: 1;
+    background: rgb(13 15 19 / 62%);
+}
+
+.path-mod-playervideo .playervideo-overlay-card {
+    --pv-accent: var(--pv-question, #3e5c9a);
+    --pv-accent-dim: rgb(62 92 154 / 20%);
+    width: 100%;
+    max-width: 24rem;
+    max-height: 100%;
+    overflow-y: auto;
+    background: var(--pv-ink-soft, #262b35);
+    color: var(--pv-ink-text, #eeeae2);
+    border: 1px solid var(--pv-ink-line, #363c48);
+    border-top: 3px solid var(--pv-accent);
+    border-radius: 0.65rem;
+    box-shadow: 0 20px 40px -16px rgb(0 0 0 / 60%);
+    padding: 1rem 1.1rem 1.1rem;
+    transform: translateY(0.5rem) scale(0.97);
+    opacity: 0;
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.25, 1), opacity 0.25s ease;
+}
+
+.path-mod-playervideo .playervideo-curtain.is-open .playervideo-overlay-card {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+}
+
+.path-mod-playervideo .playervideo-overlay-kicker {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pv-accent);
+    margin-bottom: 0.65rem;
+}
+
+.path-mod-playervideo .playervideo-overlay-kicker .playervideo-overlay-badge {
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 50%;
+    background: var(--pv-accent-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.path-mod-playervideo .playervideo-overlay-kicker .playervideo-overlay-badge svg {
+    width: 0.8rem;
+    height: 0.8rem;
+    color: var(--pv-accent);
+}
+
+.path-mod-playervideo .playervideo-overlay-card .form-check {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.7rem;
+    margin: 0 0 0.45rem;
+    border-radius: 0.4rem;
+    border: 1px solid var(--pv-ink-line, #363c48);
+    background: var(--pv-ink, #1b1f27);
+    cursor: pointer;
+}
+
+.path-mod-playervideo .playervideo-overlay-card .form-check:hover {
+    border-color: var(--pv-accent);
+}
+
+.path-mod-playervideo .playervideo-overlay-card .form-check:has(:checked) {
+    border-color: var(--pv-accent);
+    background: var(--pv-accent-dim);
+}
+
+/*
+ * Fully custom radio dot instead of accent-color on the native control: confirmed live
+ * (Playwright) that a merely-focused (not yet checked) native radio renders its own
+ * browser-drawn focus ring in the accent colour, indistinguishable from a checked one at this
+ * size — input.checked was genuinely false the whole time, but nothing in this stylesheet could
+ * override that native paint via outline/box-shadow. appearance: none hands the whole dot to
+ * this stylesheet, so "focused" and "checked" can never be visually confused again.
+ */
+.path-mod-playervideo .playervideo-overlay-card .form-check-input {
+    appearance: none;
+    width: 1.05rem;
+    height: 1.05rem;
+    margin: 0;
+    flex-shrink: 0;
+    position: relative;
+    border-radius: 50%;
+    border: 1.5px solid var(--pv-ink-line, #363c48);
+    background: transparent;
+}
+
+.path-mod-playervideo .playervideo-overlay-card .form-check-input:checked {
+    border-color: var(--pv-accent);
+}
+
+.path-mod-playervideo .playervideo-overlay-card .form-check-input:checked::after {
+    content: '';
+    position: absolute;
+    inset: 0.2rem;
+    border-radius: 50%;
+    background: var(--pv-accent);
+}
+
+.path-mod-playervideo .playervideo-overlay-card .form-check-input:focus-visible {
+    outline: 2px solid var(--pv-ink-text, #eeeae2);
+    outline-offset: 2px;
+}
+
+.path-mod-playervideo .playervideo-overlay-card .form-check-label {
+    color: var(--pv-ink-text, #eeeae2);
+    cursor: pointer;
+}
+
+.path-mod-playervideo .playervideo-overlay-card textarea.form-control {
+    background: var(--pv-ink, #1b1f27);
+    border: 1px solid var(--pv-ink-line, #363c48);
+    color: var(--pv-ink-text, #eeeae2);
+}
+
+.path-mod-playervideo .playervideo-overlay-card .btn-primary {
+    background: var(--pv-accent);
+    border-color: var(--pv-accent);
+}
+
+.path-mod-playervideo .playervideo-overlay-card .playervideo-poll-result-bar {
+    background: var(--pv-ink, #1b1f27);
+}
+
+.path-mod-playervideo .playervideo-overlay-result {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.7rem;
+}
+
+.path-mod-playervideo .playervideo-overlay-result .playervideo-overlay-badge {
+    width: 2.1rem;
+    height: 2.1rem;
+}
+
+.path-mod-playervideo .playervideo-overlay-result .playervideo-overlay-badge svg {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+
+.path-mod-playervideo .playervideo-overlay-result h4 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--pv-ink-text, #eeeae2);
+}
+
+/*
+ * Streak chip (top-start) and reward toast (top-end), both floating over the video, same
+ * pattern as the approved prototype. Purely a motivational overlay: neither is read by
+ * PHPUnit-tested logic, and both stay silent (never rendered) for an activity with no
+ * hudcorrectitem reward configured — see player.js updateStreak()/showReward().
+ */
+.path-mod-playervideo .playervideo-streak {
+    position: absolute;
+    top: 0.65rem;
+    inset-inline-start: 0.65rem;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.6rem 0.3rem 0.45rem;
+    border-radius: 999px;
+    background: rgb(13 15 19 / 55%);
+    border: 1px solid rgb(238 234 226 / 12%);
+    font-size: 0.76rem;
+    color: var(--pv-ink-text, #eeeae2);
+}
+
+.path-mod-playervideo .playervideo-streak svg {
+    width: 0.85rem;
+    height: 0.85rem;
+    color: var(--pv-gold, #e0a940);
+}
+
+.path-mod-playervideo .playervideo-reward {
+    position: absolute;
+    top: 0.65rem;
+    inset-inline-end: 0.65rem;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.7rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--pv-reward-bg-start, #3a2f16), var(--pv-reward-bg-end, #241d10));
+    border: 1px solid rgb(224 169 64 / 45%);
+    box-shadow: 0 0 22px -4px rgb(224 169 64 / 45%);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--pv-gold, #e0a940);
+    opacity: 0;
+    transform: translateY(-0.35rem) scale(0.94);
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.25);
+}
+
+.path-mod-playervideo .playervideo-reward.is-shown {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.path-mod-playervideo .playervideo-reward svg {
+    width: 0.95rem;
+    height: 0.95rem;
+}
+
+.path-mod-playervideo .playervideo-marker-readonly.active {
+    animation: playervideo-marker-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes playervideo-marker-pulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 3px var(--pv-ink-soft, #262b35), 0 0 0 5px var(--pv-ink-text, #eeeae2);
+    }
+
+    50% {
+        box-shadow: 0 0 0 3px var(--pv-ink-soft, #262b35), 0 0 0 8px var(--pv-ink-text, #eeeae2);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .path-mod-playervideo .playervideo-marker-readonly.active {
+        animation: none;
+    }
+}
+
 .path-mod-playervideo .playervideo-playback-controls {
     grid-column: 1 / -1;
     display: flex;
