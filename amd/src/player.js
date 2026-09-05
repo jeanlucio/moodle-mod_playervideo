@@ -449,11 +449,102 @@ const updateCaptionOverlay = (time) => {
 };
 
 /**
+ * @var {?HTMLElement} Shared transparent backdrop closing whichever popup menu is open on an
+ * "outside" click, created lazily once and reused by every menu — see wirePopupMenu().
+ */
+let menuBackdrop = null;
+
+/**
+ * Returns the shared popup-menu backdrop, creating and appending it to <body> the first time.
+ * A plain document-level click listener cannot detect a click landing inside the video itself:
+ * the YouTube/Vimeo embed is a cross-origin <iframe>, and a click inside it never bubbles out
+ * to this page's own document — confirmed live (Playwright: clicking the video while a menu was
+ * open left the menu open). A full-viewport backdrop sitting between the video and the popup
+ * (z-index, see styles.css) catches that click directly instead of relying on bubbling.
+ *
+ * @returns {HTMLElement}
+ */
+const getMenuBackdrop = () => {
+    if (!menuBackdrop) {
+        menuBackdrop = document.createElement('div');
+        menuBackdrop.className = 'playervideo-menu-backdrop';
+        menuBackdrop.hidden = true;
+        document.body.appendChild(menuBackdrop);
+    }
+    return menuBackdrop;
+};
+
+/**
+ * Wires a small popup menu (an icon/label button plus a list of menuitemradio buttons),
+ * YouTube-style, replacing a native <select> for the playback-speed and caption controls — a
+ * native select cannot be restyled to match the dark stage chrome. Idempotent via a dataset
+ * flag: initTimelineControls() (and therefore this) can run a second time if the student later
+ * opens review mode on the same page, and re-wiring would otherwise stack duplicate listeners.
+ *
+ * @param {HTMLElement} button The toggle button.
+ * @param {HTMLElement} menu The popup menu element (role="menu"), rebuildable via innerHTML —
+ *      selection is handled by delegation, so rebuilding its contents needs no re-wiring.
+ * @param {Function} onSelect Called with (value, itemElement) when a menu item is chosen.
+ */
+const wirePopupMenu = (button, menu, onSelect) => {
+    if (button.dataset.wired) {
+        return;
+    }
+    button.dataset.wired = '1';
+    const backdrop = getMenuBackdrop();
+
+    const close = () => {
+        menu.hidden = true;
+        backdrop.hidden = true;
+        button.setAttribute('aria-expanded', 'false');
+    };
+
+    button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (!menu.hidden) {
+            close();
+            return;
+        }
+        // Never two popups open at once.
+        document.querySelectorAll('.playervideo-menu-popup').forEach((other) => {
+            other.hidden = true;
+            other.previousElementSibling?.setAttribute?.('aria-expanded', 'false');
+        });
+        menu.hidden = false;
+        backdrop.hidden = false;
+        backdrop.onclick = close;
+        button.setAttribute('aria-expanded', 'true');
+    });
+
+    menu.addEventListener('click', (event) => {
+        const item = event.target.closest('.playervideo-menu-item');
+        if (!item) {
+            return;
+        }
+        menu.querySelectorAll('.playervideo-menu-item').forEach((el) => {
+            el.classList.remove('is-selected');
+            el.setAttribute('aria-checked', 'false');
+        });
+        item.classList.add('is-selected');
+        item.setAttribute('aria-checked', 'true');
+        close();
+        onSelect(item.dataset.value, item);
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !menu.hidden) {
+            close();
+            button.focus();
+        }
+    });
+};
+
+/**
  * Applies a caption selector choice: "" (off), "native:<code>" (a track the source adapter
  * itself renders) or "manual:<lang>" (rendered by this module's own overlay, via
  * updateCaptionOverlay). Only one of the two rendering paths is ever active at a time.
  *
- * @param {string} value The selected <option> value.
+ * @param {string} value The chosen menu item's value.
  */
 const setCaptionSelection = (value) => {
     if (adapter.setCaptionTrack) {
@@ -469,6 +560,8 @@ const setCaptionSelection = (value) => {
         activeManualCaption = manualCaptions.find((caption) => caption.lang === lang) ?? null;
     }
 
+    document.getElementById('playervideo-caption-btn')?.classList.toggle('is-active', value !== '');
+
     // The transcript panel always mirrors whichever caption is actually selected, so a search
     // already typed never silently keeps showing stale lines from a caption the student just
     // switched away from.
@@ -476,16 +569,30 @@ const setCaptionSelection = (value) => {
 };
 
 /**
- * Populates the caption selector with the merge of native tracks (read live from the source
+ * Builds one popup menu item button.
+ *
+ * @param {string} value data-value for the item.
+ * @param {string} label Already-translated (or provider-supplied) visible label.
+ * @param {boolean} selected Whether this is the initially selected item.
+ * @returns {string} HTML for one menu item.
+ */
+const buildMenuItem = (value, label, selected = false) => `
+    <button type="button" class="playervideo-menu-item${selected ? ' is-selected' : ''}" role="menuitemradio"
+        aria-checked="${selected}" data-value="${escapeHtmlAttribute(value)}">${escapeHtmlAttribute(label)}</button>
+`;
+
+/**
+ * Populates the caption menu with the merge of native tracks (read live from the source
  * adapter) and manually authored ones (mod_playervideo_get_captions) — never combined into one
  * stored list, each read from where it already lives. A source with no captions at all (e.g.
- * HTML5) still gets the "off" option alone.
+ * HTML5) still gets the "off" item alone.
  *
  * @returns {Promise<void>}
  */
 const loadCaptionOptions = async() => {
-    const select = document.getElementById('playervideo-caption-select');
-    if (!select) {
+    const button = document.getElementById('playervideo-caption-btn');
+    const menu = document.getElementById('playervideo-caption-menu');
+    if (!button || !menu) {
         return;
     }
 
@@ -500,16 +607,11 @@ const loadCaptionOptions = async() => {
     }));
 
     const offlabel = await getString('subtitlesoff', 'mod_playervideo');
-    const nativeoptions = nativetracks.map(
-        (track) => `<option value="native:${escapeHtmlAttribute(track.code)}">${escapeHtmlAttribute(track.label)}</option>`
-    );
-    const manualoptions = manualCaptions.map(
-        (caption) => `<option value="manual:${escapeHtmlAttribute(caption.lang)}">${escapeHtmlAttribute(caption.lang)}</option>`
-    );
-    select.innerHTML = [`<option value="">${offlabel}</option>`, ...nativeoptions, ...manualoptions].join('');
-    select.value = '';
+    const nativeitems = nativetracks.map((track) => buildMenuItem(`native:${track.code}`, track.label));
+    const manualitems = manualCaptions.map((caption) => buildMenuItem(`manual:${caption.lang}`, caption.lang));
+    menu.innerHTML = [buildMenuItem('', offlabel, true), ...nativeitems, ...manualitems].join('');
 
-    select.addEventListener('change', () => setCaptionSelection(select.value));
+    wirePopupMenu(button, menu, (value) => setCaptionSelection(value));
 };
 
 /**
@@ -639,18 +741,23 @@ const initTranscriptPanel = () => {
 };
 
 /**
- * Wires the playback-speed selector to the active adapter. Always reset to 1x on load — a
+ * Wires the playback-speed popup menu to the active adapter. Always reset to 1x on load — a
  * chosen speed is a per-viewing convenience, not something remembered across attempts or
  * activities, so a returning student is never confused by a video restarting faster/slower
  * than they left it.
  */
 const initSpeedControl = () => {
-    const select = document.getElementById('playervideo-speed-select');
-    if (!select) {
+    const button = document.getElementById('playervideo-speed-btn');
+    const menu = document.getElementById('playervideo-speed-menu');
+    const label = document.getElementById('playervideo-speed-label');
+    if (!button || !menu || !label) {
         return;
     }
-    select.value = '1';
-    select.addEventListener('change', () => adapter.setRate(parseFloat(select.value)));
+    label.textContent = '1x';
+    wirePopupMenu(button, menu, (value) => {
+        adapter.setRate(parseFloat(value));
+        label.textContent = `${value}x`;
+    });
 };
 
 /**

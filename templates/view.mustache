@@ -136,26 +136,40 @@
                     <div id="playervideo-markers"></div>
                 </div>
                 <div class="playervideo-playback-controls">
-                    <div class="playervideo-speed-controls">
-                        <label class="visually-hidden" for="playervideo-speed-select">
-                            {{#str}}playbackspeed, mod_playervideo{{/str}}
-                        </label>
-                        <select class="form-select form-select-sm" id="playervideo-speed-select">
-                            <option value="0.5">0.5x</option>
-                            <option value="0.75">0.75x</option>
-                            <option value="1" selected>1x</option>
-                            <option value="1.25">1.25x</option>
-                            <option value="1.5">1.5x</option>
-                            <option value="2">2x</option>
-                        </select>
+                    <div class="playervideo-menu" id="playervideo-speed-control">
+                        <button type="button" class="playervideo-menu-btn" id="playervideo-speed-btn"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="playervideo-speed-menu"
+                            aria-label="{{#str}}playbackspeed, mod_playervideo{{/str}}">
+                            <span id="playervideo-speed-label" class="mono">1x</span>
+                        </button>
+                        <div class="playervideo-menu-popup" id="playervideo-speed-menu" role="menu" hidden>
+                            <button type="button" class="playervideo-menu-item" role="menuitemradio"
+                                aria-checked="false" data-value="0.5">0.5x</button>
+                            <button type="button" class="playervideo-menu-item" role="menuitemradio"
+                                aria-checked="false" data-value="0.75">0.75x</button>
+                            <button type="button" class="playervideo-menu-item is-selected" role="menuitemradio"
+                                aria-checked="true" data-value="1">1x</button>
+                            <button type="button" class="playervideo-menu-item" role="menuitemradio"
+                                aria-checked="false" data-value="1.25">1.25x</button>
+                            <button type="button" class="playervideo-menu-item" role="menuitemradio"
+                                aria-checked="false" data-value="1.5">1.5x</button>
+                            <button type="button" class="playervideo-menu-item" role="menuitemradio"
+                                aria-checked="false" data-value="2">2x</button>
+                        </div>
                     </div>
-                    <div class="playervideo-caption-controls">
-                        <label class="visually-hidden" for="playervideo-caption-select">
-                            {{#str}}subtitles, mod_playervideo{{/str}}
-                        </label>
-                        <select class="form-select form-select-sm" id="playervideo-caption-select">
-                            <option value="">{{#str}}subtitlesoff, mod_playervideo{{/str}}</option>
-                        </select>
+                    <div class="playervideo-menu" id="playervideo-caption-control">
+                        <button type="button" class="playervideo-menu-btn" id="playervideo-caption-btn"
+                            aria-haspopup="true" aria-expanded="false" aria-controls="playervideo-caption-menu"
+                            aria-label="{{#str}}subtitles, mod_playervideo{{/str}}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                <rect x="2.5" y="5" width="19" height="14" rx="2.5"/>
+                                <path d="M7 10.3c-.5-.6-1.2-.9-2-.9-1.5 0-2.7 1.2-2.7 2.6s1.2 2.6 2.7 2.6c.8 0 1.5-.3 2-.9M15.5 10.3c-.5-.6-1.2-.9-2-.9-1.5 0-2.7 1.2-2.7 2.6s1.2 2.6 2.7 2.6c.8 0 1.5-.3 2-.9"/>
+                            </svg>
+                        </button>
+                        <div class="playervideo-menu-popup" id="playervideo-caption-menu" role="menu" hidden>
+                            <button type="button" class="playervideo-menu-item is-selected" role="menuitemradio"
+                                aria-checked="true" data-value="">{{#str}}subtitlesoff, mod_playervideo{{/str}}</button>
+                        </div>
                     </div>
                     <button type="button" class="btn btn-outline-secondary btn-sm" id="playervideo-transcript-toggle"
                         aria-expanded="false" aria-controls="playervideo-transcript-panel" hidden>
