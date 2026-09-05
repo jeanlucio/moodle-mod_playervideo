@@ -374,10 +374,10 @@ function playervideo_get_coursemodule_info(stdClass $coursemodule): cached_cm_in
 }
 
 /**
- * Renders the video inline on the course page when the teacher enabled "fixar na página do
- * curso" — a purely presentational decision: the course_modules/grade_item stay intact, so
- * the activity keeps its grade and attempts normally. Only a plain embed, no interactive
- * timeline — that only exists on the full activity page (view.php).
+ * Renders the video inline on the course page when the teacher enabled "Pin to course page" —
+ * a purely presentational decision: the course_modules/grade_item stay intact, so the activity
+ * keeps its grade and attempts normally. Only a plain embed, no interactive timeline — that
+ * only exists on the full activity page (view.php).
  *
  * Deliberately never calls $cm->set_no_view_link(): that nulls $cm->url globally (not just
  * on the course page card), which silently made the activity unreachable everywhere else on
