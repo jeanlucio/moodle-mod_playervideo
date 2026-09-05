@@ -17,21 +17,22 @@
 {{!
     @template mod_playervideo/view
 
-    The student-facing activity page: a start screen (previous attempts to review, and a
-    start/resume/new-attempt button), the interactive player screen (hidden until an attempt
-    is open) and the onboarding content shown automatically on a student's first visit to any
-    PlayerVideo activity on the site. amd/src/player.js drives all the state transitions
-    between these sections; this template only renders their static shell plus the
-    server-known start-screen data (past attempts, the correct initial button label/notice).
-    The full interactions/embed data set is passed separately, via a hidden
-    application/json data island (see lib/data-passing conventions), not through this context.
+    The student-facing activity page: an info panel (previous attempts to review, a pending-
+    correction notice, accessibility links), the interactive player screen — visible from the
+    first render, no separate start button — and the onboarding content shown automatically on
+    a student's first visit to any PlayerVideo activity on the site. The video is loaded and
+    scrubbable right away; the attempt itself is only opened on the student's first play click
+    (amd/src/player.js). showplayer (canattempt AND canstart, computed server-side) decides
+    whether the player screen renders at all; when it does not, the poster image (if any) is
+    shown as a plain static image in the info panel instead of as the video overlay. The full
+    interactions/embed data set is passed separately, via a hidden application/json data
+    island (see lib/data-passing conventions), not through this context.
 
     Example context (json):
     {
         "introbody": "<p>This video pauses at marked points to show a question or a note.</p>",
         "canattempt": true,
-        "canstart": true,
-        "startbuttonlabel": "Start",
+        "showplayer": true,
         "pendingcorrectionnotice": "",
         "previousattempts": [
             {"attemptid": 5, "attemptnumber": 1, "gradeline": "Grade: 80", "pending": false}
@@ -49,10 +50,12 @@
     }}
     <div id="playervideo-onboarding-content" hidden>{{{introbody}}}</div>
 
-    <div id="playervideo-start-screen">
+    <div id="playervideo-idle-info">
+        {{^showplayer}}
         {{#hasposter}}
         <img src="{{posterurl}}" alt="{{posterdescription}}" class="playervideo-poster">
         {{/hasposter}}
+        {{/showplayer}}
         {{^canattempt}}
         <div class="alert alert-warning">{{#str}}cannotattempt, mod_playervideo{{/str}}</div>
         {{/canattempt}}
@@ -73,9 +76,6 @@
         {{#pendingcorrectionnotice}}
         <div class="alert alert-info">{{pendingcorrectionnotice}}</div>
         {{/pendingcorrectionnotice}}
-        {{#canstart}}
-        <button type="button" class="btn btn-primary" id="playervideo-start-btn">{{startbuttonlabel}}</button>
-        {{/canstart}}
         <div class="playervideo-accessibility-links mt-2">
             {{#hasdisummary}}
             <button type="button" class="btn btn-link p-0" id="playervideo-disummary-btn">
@@ -89,11 +89,15 @@
         {{/canattempt}}
     </div>
 
-    <div id="playervideo-player-screen" hidden>
+    <div id="playervideo-player-screen" {{^showplayer}}hidden{{/showplayer}}>
         <div id="playervideo-announcer" class="visually-hidden" aria-live="polite"></div>
         <div class="playervideo-stage mb-3" id="playervideo-stage">
             <div class="playervideo-video-wrapper">
                 <div id="playervideo-target" class="ph-video-embed"></div>
+                {{#hasposter}}
+                <img src="{{posterurl}}" alt="{{posterdescription}}" class="playervideo-poster-overlay"
+                    id="playervideo-poster">
+                {{/hasposter}}
                 <div id="playervideo-caption-overlay" class="playervideo-caption-overlay" hidden></div>
             </div>
             <div class="playervideo-timeline-wrap">
@@ -155,7 +159,7 @@
                 <div id="playervideo-transcript-list" class="playervideo-transcript-list"></div>
             </div>
         </div>
-        <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="playervideo-finish-btn">
+        <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="playervideo-finish-btn" hidden>
             {{#str}}finishattempt, mod_playervideo{{/str}}
         </button>
         <div id="playervideo-interaction-overlay" class="card" hidden></div>

@@ -120,8 +120,8 @@ final class save_progress_test extends \advanced_testcase {
     }
 
     /**
-     * Tests that the ended flag flips watchedtoend to 1 (completion rule 2, see the plugin
-     * SCOPE).
+     * Tests that the ended flag flips watchedtoend to 1 (the "watched to the end" completion
+     * rule).
      *
      * @return void
      */

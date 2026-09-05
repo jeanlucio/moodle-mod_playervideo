@@ -49,8 +49,7 @@ final class view_render_test extends advanced_testcase {
             'intro' => '<p>DESCRIPTION-MARKER-SHOULD-NOT-APPEAR</p>',
             'introbody' => '<p>ONBOARDING-MARKER</p>',
             'canattempt' => true,
-            'canstart' => true,
-            'startbuttonlabel' => 'Start',
+            'showplayer' => true,
             'pendingcorrectionnotice' => '',
             'previousattempts' => [],
         ]);

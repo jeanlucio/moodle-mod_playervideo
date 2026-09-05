@@ -15,8 +15,8 @@
 
 /**
  * Correction queue: lists open-question responses awaiting a grade, offers an AI suggestion on
- * demand, and lets the teacher confirm (as-is or edited) via review_response — humano sempre no
- * loop, never an automatic grade.
+ * demand, and lets the teacher confirm (as-is or edited) via review_response — a human always
+ * stays in the loop, never an automatic grade.
  *
  * @module     mod_playervideo/grading
  * @copyright  2026 Jean Lúcio

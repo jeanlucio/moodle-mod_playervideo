@@ -15,9 +15,9 @@
 
 /**
  * Orchestrates the interactive player: picks the right source adapter, drives the pause-for-
- * interaction / auto-save / resume / anti-skip / finish / review flow described in the plugin
- * SCOPE. The three player_*.js modules only know how to talk to their own provider API; this
- * module is the only one that knows the mod_playervideo attempt lifecycle.
+ * interaction / auto-save / resume / anti-skip / finish / review flow. The three player_*.js
+ * modules only know how to talk to their own provider API; this module is the only one that
+ * knows the mod_playervideo attempt lifecycle.
  *
  * @module     mod_playervideo/player
  * @copyright  2026 Jean Lúcio
@@ -75,6 +75,15 @@ let isPlaying = false;
 let seekUnrestricted = false;
 
 /**
+ * @var {boolean} True while startReview() is driving playback. attemptId stays 0 throughout a
+ * review started before the student's own attempt began (the common case, since the review
+ * buttons and the not-yet-started player are visible together) — this flag is what keeps
+ * togglePlayPause() from mistaking a reviewer's play/pause click for the first-play trigger
+ * that opens a real attempt.
+ */
+let reviewing = false;
+
+/**
  * @var {Array} Manually authored captions for this instance, parsed once when the player loads
  * — each entry shaped {lang, cues: [{start, end, text}, ...]}.
  */
@@ -94,12 +103,23 @@ const announce = (message) => {
 };
 
 /**
- * Shows one of the three top-level screens, hiding the other two.
+ * Hides the pre-attempt info panel (previous attempts, notices, accessibility links) once the
+ * student's first play click actually opens an attempt — the player screen itself is visible
+ * from the first page render and is never toggled by this.
+ */
+const hideIdleInfo = () => {
+    const panel = document.getElementById('playervideo-idle-info');
+    if (panel) {
+        panel.hidden = true;
+    }
+};
+
+/**
+ * Shows the player screen or the attempt summary screen, hiding the other one.
  *
- * @param {string} name One of 'start', 'player', 'summary'.
+ * @param {string} name One of 'player', 'summary'.
  */
 const showScreen = (name) => {
-    document.getElementById('playervideo-start-screen').hidden = name !== 'start';
     document.getElementById('playervideo-player-screen').hidden = name !== 'player';
     document.getElementById('playervideo-summary-screen').hidden = name !== 'summary';
 };
@@ -200,12 +220,18 @@ const setPlayingState = async(playing) => {
 
 /**
  * Toggles play/pause on the active adapter — the only play/pause control now that native
- * player chrome is hidden (see player_youtube/vimeo/html5).
+ * player chrome is hidden (see player_youtube/vimeo/html5). Before any attempt exists yet, the
+ * video is already loaded and paused (see preparePlayer()); this first press is what actually
+ * opens the attempt, via beginAttempt(), instead of a separate "start" button.
  *
  * @returns {Promise<void>}
  */
 const togglePlayPause = async() => {
     if (!adapter) {
+        return;
+    }
+    if (attemptId === 0 && !reviewing) {
+        await beginAttempt();
         return;
     }
     if (isPlaying) {
@@ -680,8 +706,11 @@ const showReviewOverlay = (row) => new Promise((resolve) => {
  */
 const startReview = async(reviewattemptid) => {
     try {
+        reviewing = true;
         const data = await call('mod_playervideo_get_attempt_review', {attemptid: reviewattemptid});
+        hideIdleInfo();
         showScreen('player');
+        document.getElementById('playervideo-poster')?.setAttribute('hidden', '');
         adapter = await createAdapterForSource();
         await adapter.ready();
         seekUnrestricted = true;
@@ -692,7 +721,9 @@ const startReview = async(reviewattemptid) => {
             await showReviewOverlay(row);
         }
 
-        showScreen('start');
+        // Simplest way back to a clean idle state (matching the summary screen's own "back"
+        // button): a fresh render re-derives canstart/previousattempts and re-preps the player.
+        window.location.reload();
     } catch (error) {
         showError(error);
     }
@@ -1125,11 +1156,38 @@ const onTick = async(currentTime) => {
 };
 
 /**
- * Starts (or resumes) an attempt and shows the interactive player screen.
+ * Loads the video source and wires the timeline/controls immediately on page load, so the
+ * activity is visible and scrubbable before any attempt exists. The attempt itself only opens
+ * on the student's first play click, via beginAttempt() — see togglePlayPause().
  *
  * @returns {Promise<void>}
  */
-const startOrResumeAttempt = async() => {
+const preparePlayer = async() => {
+    try {
+        adapter = await createAdapterForSource();
+        tracker = createTracker(JSON.parse(playerData.segments));
+        await adapter.ready();
+        await initTimelineControls();
+
+        if (playerData.lastposition !== null) {
+            adapter.seek(playerData.lastposition);
+        } else if (playerData.trimstart !== null) {
+            adapter.seek(playerData.trimstart);
+        }
+    } catch (error) {
+        showError(error);
+    }
+};
+
+/**
+ * Opens (or resumes) the attempt on the student's first play click, then starts playback.
+ * Kept separate from preparePlayer() so the PlayerHUD retry cost (start_attempt.php) is only
+ * ever charged at the moment the student actually presses play, never speculatively on page
+ * load.
+ *
+ * @returns {Promise<void>}
+ */
+const beginAttempt = async() => {
     try {
         const started = await call('mod_playervideo_start_attempt', {playervideoid: playerData.playervideoid});
         attemptId = started.attemptid;
@@ -1138,20 +1196,12 @@ const startOrResumeAttempt = async() => {
         attemptFinishing = false;
         seekUnrestricted = false;
 
-        showScreen('player');
-        adapter = await createAdapterForSource();
-        tracker = createTracker(JSON.parse(playerData.segments));
-        await adapter.ready();
-        await initTimelineControls();
+        hideIdleInfo();
+        document.getElementById('playervideo-poster')?.setAttribute('hidden', '');
+        document.getElementById('playervideo-finish-btn').hidden = false;
 
         adapter.onTimeUpdate(onTick);
         adapter.onEnded(() => finishAttempt(true));
-
-        if (playerData.lastposition !== null) {
-            adapter.seek(playerData.lastposition);
-        } else if (playerData.trimstart !== null) {
-            adapter.seek(playerData.trimstart);
-        }
 
         heartbeatTimer = window.setInterval(() => heartbeat(false), HEARTBEAT_INTERVAL_MS);
         adapter.play();
@@ -1191,14 +1241,18 @@ const showDiSummary = async() => {
 };
 
 /**
- * Initialises the activity page: wires the start button and every "review this attempt"
- * button on the start screen.
+ * Initialises the activity page: loads the player right away when the student is eligible to
+ * attempt (view.php's showplayer decides whether #playervideo-player-screen starts hidden — see
+ * preparePlayer()), and wires every "review this attempt" button on the info panel.
  */
 export const init = () => {
     playerData = readPlayerData();
     Autosave.init();
 
-    document.getElementById('playervideo-start-btn')?.addEventListener('click', startOrResumeAttempt);
+    const playerScreen = document.getElementById('playervideo-player-screen');
+    if (playerScreen && !playerScreen.hidden) {
+        preparePlayer();
+    }
 
     document.querySelectorAll('.playervideo-review-btn').forEach((button) => {
         button.addEventListener('click', () => startReview(parseInt(button.dataset.attemptid, 10)));

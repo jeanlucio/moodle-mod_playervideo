@@ -35,8 +35,7 @@ use moodle_exception;
 /**
  * The teacher's review step for a DI summary: edit its text and/or approve it in one action, or
  * delete it outright. This is the only path that ever sets status to 'approved' — a summary is
- * never shown to a student until a teacher explicitly calls this with approved=true (see the
- * plugin SCOPE, "Resumo por IA em leitura fácil").
+ * never shown to a student until a teacher explicitly calls this with approved=true.
  */
 class save_di_summary extends external_api {
     /**

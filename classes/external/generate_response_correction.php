@@ -36,8 +36,8 @@ use moodle_exception;
 /**
  * Suggests a grade + feedback for a student's open-question response, via AI. Never touches
  * `teachergrade`/`teacherfeedback` — only `aigrade`/`aifeedback`, always leaving the response in
- * `pending_review` for a teacher to approve or edit via {@see review_response} (see the plugin
- * SCOPE, "Correção assistida por IA de questões abertas: humano sempre no loop").
+ * `pending_review` for a teacher to approve or edit via {@see review_response} — a human always
+ * stays in the loop, never an automatic grade.
  *
  * The AI is asked for a 0.0-1.0 completeness score, never the question's own weight — the weight
  * is an internal grading detail of this plugin, not something the prompt needs to reason about;

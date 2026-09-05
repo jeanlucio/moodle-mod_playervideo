@@ -26,9 +26,9 @@
 namespace mod_playervideo\completion;
 
 /**
- * Tests for custom_completion — the two rules covering the "no grade" case (see the plugin
- * SCOPE, "Nota opcional"): completionallinteractions counts participation across any attempt,
- * completionwatchtoend reflects the player's own native ended event.
+ * Tests for custom_completion — the two rules covering the "no grade" case:
+ * completionallinteractions counts participation across any attempt, completionwatchtoend
+ * reflects the player's own native ended event.
  *
  * @covers \mod_playervideo\completion\custom_completion
  */

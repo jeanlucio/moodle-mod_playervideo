@@ -812,6 +812,20 @@ video.ph-video-embed {
 }
 
 /*
+ * Sits over #playervideo-target inside the (position: relative) .playervideo-video-wrapper,
+ * so the video is already visible and scrubbable before any attempt exists, with a branded
+ * cover image instead of a blank/black embed until the student's first play click removes it.
+ */
+.path-mod-playervideo .playervideo-poster-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 0.5rem;
+}
+
+/*
  * Not scoped under .path-mod-playervideo: core/modal hoists its markup to <body> before
  * showing it, breaking ancestor scope —
  * same exception already applied to .ph-video-embed above. The DI summary text is stored as

@@ -157,8 +157,12 @@ if ($canattempt) {
 }
 
 $canstart = $canattempt && attempt_manager::can_start_new_attempt($instance->id, $userid, (int) $instance->maxattempts);
-$attemptstaken = $DB->count_records('playervideo_attempts', ['playervideoid' => $instance->id, 'userid' => $userid]);
-$startbuttonlabel = get_string($attemptstaken > 0 ? 'newattempt' : 'startattempt', 'mod_playervideo');
+
+// The interactive player renders (and loads the video) immediately, with no separate start
+// button: the attempt itself only opens on the student's first play click (see
+// mod_playervideo_start_attempt and amd/src/player.js). When the student is not eligible to
+// play at all, the info panel falls back to a plain static poster image instead.
+$showplayer = $canattempt && $canstart;
 
 $shouldautoshowintro = !intro_service::has_seen_intro($userid);
 if ($shouldautoshowintro) {
@@ -203,8 +207,7 @@ echo html_writer::tag(
 echo $OUTPUT->render_from_template('mod_playervideo/view', [
     'introbody' => get_string('introbody', 'mod_playervideo'),
     'canattempt' => $canattempt,
-    'canstart' => $canstart,
-    'startbuttonlabel' => $startbuttonlabel,
+    'showplayer' => $showplayer,
     'pendingcorrectionnotice' => $pendingcorrectionnotice,
     'previousattempts' => $previousattempts,
     'hasdisummary' => $approvedsummary !== null,
