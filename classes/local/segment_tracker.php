@@ -40,6 +40,18 @@ class segment_tracker {
     private const MERGE_TOLERANCE = 0.5;
 
     /**
+     * @var int Hard ceiling on how many non-overlapping intervals a normalised set may hold.
+     *
+     * A real playback session produces tens of intervals; a hostile heartbeat could otherwise
+     * submit an array crafted to survive merging (every entry > MERGE_TOLERANCE apart) and bloat
+     * playervideo_progress.segments into a multi-megabyte blob that every later heartbeat and the
+     * teacher's engagement report then re-sort. save_progress rejects an oversized request
+     * outright; this truncates whatever still gets through, so the stored set can never grow
+     * unbounded.
+     */
+    public const MAX_INTERVALS = 2000;
+
+    /**
      * Validates and clamps one raw interval against the known video duration.
      *
      * @param mixed $interval Untrusted candidate, expected to be a [start, end] pair.
@@ -94,7 +106,8 @@ class segment_tracker {
             }
             $merged[$lastindex][1] = max($merged[$lastindex][1], $interval[1]);
         }
-        return $merged;
+
+        return count($merged) > self::MAX_INTERVALS ? array_slice($merged, 0, self::MAX_INTERVALS) : $merged;
     }
 
     /**

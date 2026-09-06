@@ -136,6 +136,7 @@ $string['error_responsetextrequired'] = 'Enter your response.';
 $string['error_seekaheadblocked'] = 'You cannot skip ahead of what you have already watched.';
 $string['error_studentnotinyourgroup'] = 'This student is not in one of your groups.';
 $string['error_timestamprequired'] = 'Enter the video timestamp first.';
+$string['error_toomanysegments'] = 'The playback report is too large to save. Reload the activity and try again.';
 $string['error_transcriptrequired'] = 'Paste a transcript first.';
 $string['error_videourl'] = 'Enter a valid YouTube/Vimeo URL';
 $string['exitfullscreen'] = 'Exit full screen';

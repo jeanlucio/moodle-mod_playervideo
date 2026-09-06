@@ -26,6 +26,7 @@
 namespace mod_playervideo\external;
 
 use core_external\external_api;
+use mod_playervideo\local\segment_tracker;
 
 /**
  * Tests for the mod_playervideo_save_progress web service.
@@ -146,8 +147,11 @@ final class save_progress_test extends \advanced_testcase {
     public function test_calculates_watchedpct_from_merged_segments(): void {
         global $DB;
 
-        $this->call(['lastposition' => 60, 'segments' => '[[0,60]]', 'duration' => 600]);
-        $result = $this->call(['lastposition' => 600, 'segments' => '[[0,60],[480,600]]', 'duration' => 600]);
+        // Duration is set by the teacher (via save_trim), not by the heartbeat.
+        $DB->set_field('playervideo', 'duration', 600, ['id' => $this->instance->id]);
+
+        $this->call(['lastposition' => 60, 'segments' => '[[0,60]]']);
+        $result = $this->call(['lastposition' => 600, 'segments' => '[[0,60],[480,600]]']);
 
         $this->assertFalse($result['error']);
         $this->assertEqualsWithDelta(30.0, $result['data']['watchedpct'], 0.01);
@@ -155,72 +159,45 @@ final class save_progress_test extends \advanced_testcase {
             'playervideoid' => $this->instance->id,
             'userid' => $this->student->id,
         ]), 0.01);
-        $this->assertEqualsWithDelta(600.0, (float) $DB->get_field('playervideo', 'duration', [
-            'id' => $this->instance->id,
-        ]), 0.01);
     }
 
     /**
-     * Tests that a heartbeat reporting a smaller duration than already known never shrinks the
-     * stored instance duration — an isolated player metadata glitch must not skew watchedpct for
-     * every other student watching the same video.
+     * Tests that the student heartbeat never writes playervideo.duration — not to establish it
+     * on a fresh activity, and not to ratchet an already-set value. Only a teacher (save_trim)
+     * owns that shared, class-wide column.
      *
      * @return void
      */
-    public function test_duration_never_decreases(): void {
+    public function test_save_progress_never_writes_the_instance_duration(): void {
         global $DB;
 
-        $this->call(['lastposition' => 10, 'duration' => 600]);
-        $this->call(['lastposition' => 20, 'duration' => 300]);
-
-        $this->assertEqualsWithDelta(600.0, (float) $DB->get_field('playervideo', 'duration', [
-            'id' => $this->instance->id,
-        ]), 0.01);
-    }
-
-    /**
-     * Tests that an out-of-range duration (the classic griefing payload) is ignored outright and
-     * never becomes the shared divisor for everyone's watched percentage.
-     *
-     * @return void
-     */
-    public function test_hostile_duration_is_rejected(): void {
-        global $DB;
-
-        $result = $this->call(['lastposition' => 1, 'segments' => '[[0,1]]', 'duration' => 999999999]);
-
-        $this->assertFalse($result['error']);
+        // Fresh activity, no teacher value yet: a huge reported duration must not establish it.
+        $this->call(['lastposition' => 1, 'segments' => '[[0,1]]', 'duration' => 999999999]);
         $this->assertNull($DB->get_field('playervideo', 'duration', ['id' => $this->instance->id]));
-    }
 
-    /**
-     * Tests that once an honest duration is established, a later heartbeat cannot ratchet it
-     * upwards — a student inflating the divisor would wreck watchedpct and the engagement report
-     * for the whole class.
-     *
-     * @return void
-     */
-    public function test_established_duration_cannot_be_ratcheted_up(): void {
-        global $DB;
-
-        $this->call(['lastposition' => 60, 'segments' => '[[0,60]]', 'duration' => 600]);
-        $this->call(['lastposition' => 90, 'segments' => '[[0,90]]', 'duration' => 90000]);
-
+        // Established value: repeated heartbeats (large jump and slow ratchet) must not move it.
+        $DB->set_field('playervideo', 'duration', 600, ['id' => $this->instance->id]);
+        $this->call(['lastposition' => 90, 'segments' => '[]', 'duration' => 90000]);
+        for ($i = 0; $i < 10; $i++) {
+            $this->call(['lastposition' => 90, 'segments' => '[]', 'duration' => 660 + $i * 90]);
+        }
         $this->assertEqualsWithDelta(600.0, (float) $DB->get_field('playervideo', 'duration', [
             'id' => $this->instance->id,
         ]), 0.01);
     }
 
     /**
-     * Tests that the stored resume position is clamped to the video duration — a heartbeat
-     * cannot park lastposition (or, through it, any later divisor heuristic) at an absurd value.
+     * Tests that the stored resume position is clamped to the (teacher-set) video duration — a
+     * heartbeat cannot park lastposition at an absurd value.
      *
      * @return void
      */
     public function test_lastposition_is_clamped_to_duration(): void {
         global $DB;
 
-        $this->call(['lastposition' => 60, 'segments' => '[[0,60]]', 'duration' => 600]);
+        $DB->set_field('playervideo', 'duration', 600, ['id' => $this->instance->id]);
+
+        $this->call(['lastposition' => 60, 'segments' => '[[0,60]]']);
         $this->call(['lastposition' => 999999]);
 
         $this->assertEqualsWithDelta(600.0, (float) $DB->get_field('playervideo_progress', 'lastposition', [
@@ -258,6 +235,24 @@ final class save_progress_test extends \advanced_testcase {
 
         $this->assertFalse($result['error']);
         $this->assertEqualsWithDelta(0.0, $result['data']['watchedpct'], 0.01);
+    }
+
+    /**
+     * Tests that a heartbeat carrying an absurd number of intervals is rejected outright, so a
+     * crafted payload cannot bloat playervideo_progress.segments into a multi-megabyte blob.
+     *
+     * @return void
+     */
+    public function test_rejects_a_heartbeat_with_too_many_segments(): void {
+        $segments = [];
+        for ($i = 0; $i <= segment_tracker::MAX_INTERVALS; $i++) {
+            $segments[] = [$i * 2, $i * 2 + 1];
+        }
+
+        $result = $this->call(['lastposition' => 5, 'segments' => json_encode($segments)]);
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_toomanysegments', $result['exception']->errorcode);
     }
 
     /**

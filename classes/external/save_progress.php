@@ -29,7 +29,6 @@ use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
-use mod_playervideo\local\duration_resolver;
 use mod_playervideo\local\segment_tracker;
 use moodle_exception;
 use stdClass;
@@ -61,7 +60,8 @@ class save_progress extends external_api {
             'segments' => new external_value(PARAM_RAW, 'JSON array of watched second ranges', VALUE_DEFAULT, '[]'),
             'duration' => new external_value(
                 PARAM_FLOAT,
-                'Video duration reported by the player, in seconds (0 when not yet known)',
+                'Video duration reported by the player, in seconds; accepted for player compatibility '
+                    . 'but ignored — only a teacher establishes the instance duration (see save_trim)',
                 VALUE_DEFAULT,
                 0.0
             ),
@@ -75,7 +75,7 @@ class save_progress extends external_api {
      * @param int $attemptid Attempt id.
      * @param float $lastposition Current playback position, in seconds.
      * @param string $segments JSON array of watched second ranges.
-     * @param float $duration Video duration reported by the player, in seconds (0 when not yet known).
+     * @param float $duration Reported by the player; accepted for compatibility but ignored (see save_trim).
      * @param bool $ended Whether the native ended event just fired.
      * @return array Confirmation and the newly calculated watched percentage.
      */
@@ -108,6 +108,12 @@ class save_progress extends external_api {
         }
         $incoming = is_array($incoming) ? $incoming : [];
 
+        // A real player emits tens of intervals per session; anything wildly beyond the stored
+        // ceiling is a crafted payload aimed at bloating playervideo_progress.segments.
+        if (count($incoming) > segment_tracker::MAX_INTERVALS) {
+            throw new moodle_exception('error_toomanysegments', 'mod_playervideo');
+        }
+
         $now = time();
         $progress = $DB->get_record('playervideo_progress', [
             'playervideoid' => $attempt->playervideoid,
@@ -123,22 +129,19 @@ class save_progress extends external_api {
             $progress->timecreated = $now;
         }
 
-        $existing = json_decode((string) $progress->segments, true);
-        $clampceiling = (float) $instance->duration > 0 ? (float) $instance->duration : (float) DAYSECS;
-        $merged = segment_tracker::merge(is_array($existing) ? $existing : [], $incoming, $clampceiling);
+        // The video duration is instance-level content shared by the whole class — it divides
+        // everyone's watchedpct and bounds the engagement report. Only a teacher establishes it,
+        // through the interactions editor (save_trim); this student endpoint reads it and never
+        // writes it. While it is still unset, watched percentage cannot be computed and the report
+        // window falls back to the trim — the first teacher to open the editor fixes both.
+        $duration = (float) ($instance->duration ?? 0);
 
-        // The video duration is shared content, not this student's progress: it divides
-        // everyone's watchedpct and bounds the engagement report. It is written only here,
-        // from an untrusted browser value, so reconcile it against what has provably been
-        // watched instead of trusting (and permanently keeping) whatever a heartbeat sends.
-        duration_resolver::reconcile($instance, (float) $params['duration'], $merged, $DB);
-        if ((float) $instance->duration > 0) {
-            $merged = segment_tracker::normalise($merged, (float) $instance->duration);
-        }
+        $existing = json_decode((string) $progress->segments, true);
+        $merged = segment_tracker::merge(is_array($existing) ? $existing : [], $incoming, $duration);
 
         $lastposition = max(0.0, (float) $params['lastposition']);
-        if ((float) $instance->duration > 0) {
-            $lastposition = min($lastposition, (float) $instance->duration);
+        if ($duration > 0) {
+            $lastposition = min($lastposition, $duration);
         }
         $progress->lastposition = $lastposition;
         $progress->segments = json_encode($merged);

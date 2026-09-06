@@ -124,6 +124,24 @@ final class segment_tracker_test extends \advanced_testcase {
     }
 
     /**
+     * Tests that a normalised set is truncated to MAX_INTERVALS — a crafted heartbeat that slips
+     * past the request-level cap must still not persist an unbounded blob.
+     *
+     * @return void
+     */
+    public function test_normalise_truncates_at_max_intervals(): void {
+        $segments = [];
+        for ($i = 0; $i < segment_tracker::MAX_INTERVALS + 500; $i++) {
+            $segments[] = [$i * 2, $i * 2 + 1];
+        }
+
+        $result = segment_tracker::normalise($segments);
+
+        $this->assertCount(segment_tracker::MAX_INTERVALS, $result);
+        $this->assertSame([0.0, 1.0], $result[0]);
+    }
+
+    /**
      * Tests that merging a superset of the existing data is idempotent — the exact shape a
      * heartbeat sends, since the client always reports its whole accumulated tracker, not a
      * delta.

@@ -38,11 +38,11 @@ use moodle_exception;
  * (at most one start, one end), never a repeatable list item.
  *
  * The optional `duration` parameter lets the interactions editor persist the video length the
- * player reported to it, from the teacher's own browser. Every real activity passes through
- * that editor (it is where interactions are authored), so this establishes an authoritative
- * duration before any student attempt — closing the window where a hostile first heartbeat to
- * save_progress could otherwise set it (see duration_resolver). A teacher holding
- * mod/playervideo:manage is trusted here: the value is stored as-is, only sanity-clamped.
+ * player reported to it, from the teacher's own browser. This is the only write path to
+ * playervideo.duration: save_progress (the student heartbeat) never touches it. Every real
+ * activity passes through this editor — it is where interactions are authored — so the
+ * duration is established here before any student attempt. A teacher holding
+ * mod/playervideo:manage is trusted: the value is stored as-is, only sanity-clamped to 24h.
  */
 class save_trim extends external_api {
     /**

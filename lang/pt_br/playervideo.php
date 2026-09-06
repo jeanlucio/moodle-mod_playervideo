@@ -136,6 +136,7 @@ $string['error_responsetextrequired'] = 'Digite sua resposta.';
 $string['error_seekaheadblocked'] = 'Não é possível avançar além do que já foi assistido.';
 $string['error_studentnotinyourgroup'] = 'Este estudante não está em nenhum dos seus grupos.';
 $string['error_timestamprequired'] = 'Informe o timestamp do vídeo antes.';
+$string['error_toomanysegments'] = 'O registro de reprodução está grande demais para salvar. Recarregue a atividade e tente de novo.';
 $string['error_transcriptrequired'] = 'Cole um transcript primeiro.';
 $string['error_videourl'] = 'Informe uma URL válida do YouTube/Vimeo';
 $string['exitfullscreen'] = 'Sair da tela cheia';
