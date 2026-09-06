@@ -285,6 +285,7 @@ const saveTrim = async() => {
             playervideoid: editorData.playervideoid,
             trimstart,
             trimend,
+            duration: duration > 0 ? duration : null,
         });
     } catch (error) {
         showError(error);
@@ -1672,6 +1673,16 @@ export const init = async() => {
     } catch (error) {
         showError(error);
         duration = 0;
+    }
+
+    // Persist the length the player just reported, from the teacher's own browser, whenever it
+    // is missing or disagrees with what is stored. Every activity is authored through this
+    // screen, so this fixes an authoritative duration before any student attempt — and repairs
+    // one a hostile save_progress heartbeat may have planted (see duration_resolver on the
+    // server). Only when it would actually change something, to avoid a write on every open.
+    if (duration > 0 && (editorData.duration === null || Math.abs(editorData.duration - duration) > 1)) {
+        await saveTrim();
+        editorData.duration = duration;
     }
 
     document.getElementById('playervideo-ruler-end').textContent = formatTime(duration);

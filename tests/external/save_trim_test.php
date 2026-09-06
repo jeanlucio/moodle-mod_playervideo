@@ -130,4 +130,40 @@ final class save_trim_test extends \advanced_testcase {
         $this->assertTrue($result['error']);
         $this->assertSame('error_invalidtrim', $result['exception']->errorcode);
     }
+
+    /**
+     * Tests that the editor can establish an authoritative video duration through this call,
+     * and that a trim-only call leaves an already stored duration untouched.
+     *
+     * @return void
+     */
+    public function test_duration_is_persisted_when_supplied_and_left_alone_otherwise(): void {
+        global $DB;
+
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
+        $instance = $generator->create_instance(['course' => $this->course->id]);
+
+        $result = $this->call(['playervideoid' => $instance->id, 'trimstart' => null, 'trimend' => null, 'duration' => 372.4]);
+        $this->assertEqualsWithDelta(372.4, $result['data']['duration'], 0.01);
+        $this->assertEqualsWithDelta(372.4, (float) $DB->get_field('playervideo', 'duration', ['id' => $instance->id]), 0.01);
+
+        $result = $this->call(['playervideoid' => $instance->id, 'trimstart' => 10, 'trimend' => 300]);
+        $this->assertEqualsWithDelta(372.4, $result['data']['duration'], 0.01);
+        $this->assertEqualsWithDelta(372.4, (float) $DB->get_field('playervideo', 'duration', ['id' => $instance->id]), 0.01);
+    }
+
+    /**
+     * Tests that an out-of-range duration reported to this call is ignored.
+     *
+     * @return void
+     */
+    public function test_out_of_range_duration_is_ignored(): void {
+        global $DB;
+
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
+        $instance = $generator->create_instance(['course' => $this->course->id]);
+
+        $this->call(['playervideoid' => $instance->id, 'trimstart' => null, 'trimend' => null, 'duration' => 9999999]);
+        $this->assertNull($DB->get_field('playervideo', 'duration', ['id' => $instance->id]));
+    }
 }

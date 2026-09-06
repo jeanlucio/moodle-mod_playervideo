@@ -66,6 +66,7 @@ $editordata = [
     'embedurl' => $embedurl !== null ? $embedurl->out(false) : null,
     'trimstart' => $instance->trimstart !== null ? (float) $instance->trimstart : null,
     'trimend' => $instance->trimend !== null ? (float) $instance->trimend : null,
+    'duration' => $instance->duration !== null ? (float) $instance->duration : null,
 ];
 
 $PAGE->requires->js_call_amd('mod_playervideo/interactions_editor', 'init', []);
