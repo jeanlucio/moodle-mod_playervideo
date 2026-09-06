@@ -122,16 +122,64 @@ final class save_progress_test extends \advanced_testcase {
 
     /**
      * Tests that the ended flag flips watchedtoend to 1 (the "watched to the end" completion
-     * rule).
+     * rule) when corroborated by real merged coverage of the playback window.
      *
      * @return void
      */
-    public function test_ended_flag_sets_watchedtoend(): void {
+    public function test_ended_flag_sets_watchedtoend_when_corroborated_by_coverage(): void {
         global $DB;
 
-        $this->call(['lastposition' => 120, 'ended' => true]);
+        $DB->set_field('playervideo', 'duration', 120, ['id' => $this->instance->id]);
+
+        $this->call(['lastposition' => 120, 'segments' => '[[0,120]]', 'ended' => true]);
 
         $this->assertSame(1, (int) $DB->get_field('playervideo_progress', 'watchedtoend', [
+            'playervideoid' => $this->instance->id,
+            'userid' => $this->student->id,
+        ]));
+    }
+
+    /**
+     * Regression test for the confirmed low-severity finding: a heartbeat claiming ended=true
+     * while contributing little or no real segment coverage (e.g. segments: '[]', the "cold
+     * start" completion forgery) must not be honoured — the native ended event only ever fires
+     * after real playback, which would always leave a high watchedpct behind it.
+     *
+     * @return void
+     */
+    public function test_ended_flag_is_ignored_without_corroborating_coverage(): void {
+        global $DB;
+
+        $DB->set_field('playervideo', 'duration', 600, ['id' => $this->instance->id]);
+
+        $result = $this->call(['lastposition' => 0, 'segments' => '[]', 'ended' => true]);
+
+        $this->assertFalse($result['error']);
+        $this->assertEqualsWithDelta(0.0, $result['data']['watchedpct'], 0.01);
+        $this->assertSame(0, (int) $DB->get_field('playervideo_progress', 'watchedtoend', [
+            'playervideoid' => $this->instance->id,
+            'userid' => $this->student->id,
+        ]));
+    }
+
+    /**
+     * Tests that ended=true is only honoured once accumulated coverage across heartbeats
+     * actually crosses the corroboration floor — a partial-coverage heartbeat claiming ended
+     * must not flip watchedtoend prematurely.
+     *
+     * @return void
+     */
+    public function test_ended_flag_is_ignored_below_the_corroboration_floor(): void {
+        global $DB;
+
+        $DB->set_field('playervideo', 'duration', 100, ['id' => $this->instance->id]);
+
+        // Only half the window covered — well under the corroboration floor.
+        $result = $this->call(['lastposition' => 50, 'segments' => '[[0,50]]', 'ended' => true]);
+
+        $this->assertFalse($result['error']);
+        $this->assertEqualsWithDelta(50.0, $result['data']['watchedpct'], 0.01);
+        $this->assertSame(0, (int) $DB->get_field('playervideo_progress', 'watchedtoend', [
             'playervideoid' => $this->instance->id,
             'userid' => $this->student->id,
         ]));

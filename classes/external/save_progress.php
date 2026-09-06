@@ -46,8 +46,22 @@ use stdClass;
  * duration and merged with the already-persisted set via segment_tracker before being stored —
  * never persisted as the raw JSON the client sent, which is what happened previously and left
  * watchedpct permanently unwritten.
+ *
+ * The ended flag is likewise untrusted on its own: it is only honoured when corroborated by the
+ * watched percentage the same request already computed from $merged (see ENDED_MIN_WATCHEDPCT) —
+ * a heartbeat claiming "played to the end" while contributing little or no real segment coverage
+ * is a forged completion attempt, not something the native ended event would ever produce.
  */
 class save_progress extends external_api {
+    /**
+     * @var float Minimum watched percentage the client's `ended` flag must be corroborated by
+     * before it is honoured. The native `ended` event only fires once real playback reaches the
+     * end, so a genuine report always coincides with a high watched percentage; a single
+     * heartbeat claiming `ended` with little or no actually-merged coverage (e.g. `segments:'[]'`)
+     * is a forged completion attempt, not a real playback session.
+     */
+    private const ENDED_MIN_WATCHEDPCT = 90.0;
+
     /**
      * Returns the parameter definitions.
      *
@@ -147,7 +161,12 @@ class save_progress extends external_api {
         $progress->segments = json_encode($merged);
         $progress->watchedpct = self::calculate_watched_percent($instance, $merged);
         $progress->timemodified = $now;
-        if ($params['ended']) {
+
+        // The ended flag itself is unverifiable client state, but it must be corroborated by the
+        // segments already merged into $merged above — a heartbeat claiming "played to the end"
+        // while contributing little or no real coverage (e.g. segments: '[]') is not honoured.
+        $endedcorroborated = $params['ended'] && $progress->watchedpct >= self::ENDED_MIN_WATCHEDPCT;
+        if ($endedcorroborated) {
             $progress->watchedtoend = 1;
         }
 
@@ -157,7 +176,7 @@ class save_progress extends external_api {
             $DB->insert_record('playervideo_progress', $progress);
         }
 
-        if ($params['ended']) {
+        if ($endedcorroborated) {
             $course = get_course($cm->course);
             $completion = new \completion_info($course);
             if ($completion->is_enabled($cm)) {
