@@ -268,4 +268,21 @@ final class generate_questions_batch_test extends \advanced_testcase {
         $this->assertStringContainsString('"[m:ss]" tags', $prompt);
         $this->assertStringContainsString('[0:05] First line.', $prompt);
     }
+
+    /**
+     * Regression test for a real bug reported live: a Portuguese transcript came back with
+     * English questions, because nothing in the prompt ever told the AI which language to
+     * reply in — it defaulted to the prompt's own language (English) instead of mirroring the
+     * transcript. build_prompt() must always instruct it to match the transcript's language.
+     *
+     * @return void
+     */
+    public function test_build_prompt_instructs_matching_the_transcript_language(): void {
+        $method = new \ReflectionMethod(generate_questions_batch::class, 'build_prompt');
+        $method->setAccessible(true);
+
+        $prompt = $method->invoke(null, "[0:05] Primeira linha em português.", 3, 'mc', 4);
+
+        $this->assertStringContainsString('SAME language the transcript', $prompt);
+    }
 }

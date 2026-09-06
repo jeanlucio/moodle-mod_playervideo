@@ -489,7 +489,7 @@ const openBatchGenerateModal = async() => {
 
     const [usetranscriptlabel, langlabel] = await Promise.all([
         getString('usetranscriptascaption', 'mod_playervideo'),
-        getString('captionlanguage', 'mod_playervideo'),
+        getString('batchcaptionlanguage', 'mod_playervideo'),
     ]);
 
     const body = `

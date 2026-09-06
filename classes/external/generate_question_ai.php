@@ -166,9 +166,15 @@ class generate_question_ai extends external_api {
 
         if (trim($videocontext) !== '') {
             $parts[] = 'What is happening in the video around this moment: "' . $videocontext . '"';
+            $parts[] = 'Write the question text and every answer option in the SAME language the '
+                . 'context above is written in — never translate it to English or any other language.';
         } else {
+            // No context text to match a language against — fall back to the language the
+            // teacher using this tool is currently working in, rather than always defaulting
+            // to English (the language this very prompt happens to be written in).
             $parts[] = 'No specific context was given for this moment — write a general '
-                . 'comprehension-check question suitable for a video lesson.';
+                . 'comprehension-check question suitable for a video lesson, in '
+                . get_string('thislanguage', 'langconfig') . '.';
         }
 
         if ($qtype === 'essay') {

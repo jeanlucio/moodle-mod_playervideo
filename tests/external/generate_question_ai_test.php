@@ -194,4 +194,24 @@ final class generate_question_ai_test extends \advanced_testcase {
         $essayprompt = $method->invoke(null, 'essay', 30, '', 6);
         $this->assertStringNotContainsString('answer options', $essayprompt);
     }
+
+    /**
+     * Regression test for a real bug reported live: nothing in the prompt ever told the AI
+     * which language to reply in, so it defaulted to the prompt's own language (English) even
+     * when the grounding context was written in Portuguese. With a context given, the prompt
+     * must instruct the AI to match that context's language; with none given (nothing to match
+     * against), it must fall back to the current Moodle UI language instead of always English.
+     *
+     * @return void
+     */
+    public function test_build_prompt_instructs_matching_the_context_language(): void {
+        $method = new \ReflectionMethod(generate_question_ai::class, 'build_prompt');
+        $method->setAccessible(true);
+
+        $withcontext = $method->invoke(null, 'multichoice', 30, 'A fotossíntese converte luz em energia.', 4);
+        $this->assertStringContainsString('SAME language the', $withcontext);
+
+        $withoutcontext = $method->invoke(null, 'multichoice', 30, '', 4);
+        $this->assertStringContainsString(get_string('thislanguage', 'langconfig'), $withoutcontext);
+    }
 }

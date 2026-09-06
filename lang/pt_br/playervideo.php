@@ -50,6 +50,7 @@ $string['attemptsallowed'] = 'Tentativas permitidas';
 $string['attemptsheader'] = 'Tentativas e reprodução';
 $string['attemptsummaryheader'] = 'Resumo da tentativa';
 $string['backtoactivity'] = 'Voltar para a atividade';
+$string['batchcaptionlanguage'] = 'Idioma da legenda';
 $string['batchcount'] = 'Número de perguntas';
 $string['cannotattempt'] = 'Você não tem permissão para realizar esta atividade.';
 $string['captioncontent'] = 'Conteúdo da legenda';

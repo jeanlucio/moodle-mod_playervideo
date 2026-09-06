@@ -276,6 +276,8 @@ class generate_questions_batch extends external_api {
         return implode("\n", [
             'You are an instructional designer creating comprehension questions for an educational '
                 . 'video, from its transcript below.',
+            'Write the question text and every answer option in the SAME language the transcript '
+                . 'itself is written in — never translate it to English or any other language.',
             "Pick the {$count} best moments in the transcript for a comprehension question.",
             $formatinstruction,
             'Each transcript line below starts with its own "[m:ss]" tag.',
