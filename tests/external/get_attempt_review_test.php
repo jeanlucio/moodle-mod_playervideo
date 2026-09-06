@@ -151,6 +151,56 @@ final class get_attempt_review_test extends \advanced_testcase {
     }
 
     /**
+     * Regression test for the confirmed medium finding: an interaction this attempt never
+     * answered ('notreached') must come back with no question/prompt text, no options and no
+     * `correct` flag — finish_attempt does not require answering anything, so a student could
+     * otherwise start an attempt, finish it instantly, read the whole answer key back and use it
+     * in a fresh attempt (maxattempts defaults to unlimited).
+     *
+     * @return void
+     */
+    public function test_unreached_question_does_not_leak_the_answer_key(): void {
+        global $DB;
+
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category(['contextid' => \context_system::instance()->id]);
+        $question = $questiongenerator->create_question('truefalse', null, [
+            'category' => $category->id,
+            'correctanswer' => true,
+        ]);
+
+        $now = time();
+        $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $this->instance->id, 'timestamp' => 10, 'type' => 'question', 'weight' => 1,
+            'questionid' => $question->id, 'notetext' => null, 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $this->instance->id, 'timestamp' => 20, 'type' => 'note', 'weight' => 1,
+            'questionid' => null, 'notetext' => 'Secret note', 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        // Finish without answering or viewing anything — the PoC path.
+        $this->finish();
+        $result = $this->call();
+
+        $this->assertFalse($result['error']);
+        $rows = $result['data']['interactions'];
+        $this->assertCount(2, $rows);
+
+        $this->assertSame('question', $rows[0]['type']);
+        $this->assertSame('notreached', $rows[0]['status']);
+        $this->assertSame([], $rows[0]['options']);
+        $this->assertSame('', $rows[0]['questiontext']);
+        $this->assertSame('', $rows[0]['qtype']);
+
+        $this->assertSame('note', $rows[1]['type']);
+        $this->assertSame('notreached', $rows[1]['status']);
+        $this->assertSame('', $rows[1]['notetext']);
+    }
+
+    /**
      * Tests that a poll vote is reported with the full vote distribution, and the option this
      * attempt chose flagged as selected — with never a "correct" one.
      *

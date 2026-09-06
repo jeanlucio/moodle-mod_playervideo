@@ -38,6 +38,11 @@ use moodle_exception;
  * Read-only view of one attempt: the response given, the correct answer and feedback per
  * interaction, in timeline order. Reused for both the review-mode overlay and the compact
  * attempt summary shown right after finishing.
+ *
+ * An interaction this attempt never answered ('notreached') is reported with its type, timestamp
+ * and status only — never its question/prompt text, options or the `correct` flag. A finished
+ * attempt can hold such rows (finish_attempt does not require answering everything), and the
+ * student may still have another attempt available.
  */
 class get_attempt_review extends external_api {
     /**
@@ -99,11 +104,23 @@ class get_attempt_review extends external_api {
             $responsesbyinteraction[$response->interactionid] = $response;
         }
 
-        $questionids = array_values(array_filter(array_map(
-            static fn($record) => $record->type === 'question' ? (int) $record->questionid : null,
-            $interactions
-        )));
-        $questionsbyid = question_service::get_questions_for_review($questionids, $context);
+        // Resolve the answer key (get_questions_for_review returns each option's `correct` flag
+        // and per-option feedback) only for questions this attempt actually answered. A finished
+        // attempt can still hold 'notreached' interactions — finish_attempt does not require
+        // answering everything — and their correct answers must never reach a student who can
+        // still start another attempt.
+        $answeredquestionids = [];
+        foreach ($interactions as $record) {
+            $isansweredquestion = $record->type === 'question'
+                && $record->questionid !== null
+                && isset($responsesbyinteraction[$record->id]);
+            if ($isansweredquestion) {
+                $answeredquestionids[] = (int) $record->questionid;
+            }
+        }
+        $questionsbyid = $answeredquestionids === []
+            ? []
+            : question_service::get_questions_for_review(array_values(array_unique($answeredquestionids)), $context);
 
         $pollinteractionids = array_values(array_filter(array_map(
             static fn($record) => $record->type === 'poll' ? (int) $record->id : null,
@@ -119,7 +136,7 @@ class get_attempt_review extends external_api {
                 'interactionid' => (int) $interaction->id,
                 'timestamp' => (float) $interaction->timestamp,
                 'type' => $interaction->type,
-                'notetext' => $interaction->type !== 'question' ? format_text(
+                'notetext' => ($response !== null && $interaction->type !== 'question') ? format_text(
                     $interaction->notetext ?? '',
                     $interaction->notetextformat,
                     ['context' => $context]
@@ -134,7 +151,7 @@ class get_attempt_review extends external_api {
                 'status' => $response !== null ? $response->status : 'notreached',
             ];
 
-            if ($interaction->type === 'question' && $interaction->questionid !== null) {
+            if ($response !== null && $interaction->type === 'question' && $interaction->questionid !== null) {
                 $question = $questionsbyid[(int) $interaction->questionid] ?? null;
                 if ($question !== null) {
                     $row['questiontext'] = $question['text'];
@@ -143,18 +160,18 @@ class get_attempt_review extends external_api {
                         'id' => $option['id'],
                         'text' => $option['text'],
                         'correct' => $option['correct'],
-                        'selected' => $response !== null && (int) $response->answerid === $option['id'],
+                        'selected' => (int) $response->answerid === $option['id'],
                         'votes' => 0,
                         'percent' => 0.0,
                     ], $question['options']);
                 }
-            } else if ($interaction->type === 'poll') {
+            } else if ($response !== null && $interaction->type === 'poll') {
                 $polloptions = $polloptionsbyinteraction[(int) $interaction->id] ?? [];
                 $row['options'] = array_map(static fn(array $option): array => [
                     'id' => $option['id'],
                     'text' => $option['text'],
                     'correct' => false,
-                    'selected' => $response !== null && (int) $response->polloptionid === $option['id'],
+                    'selected' => (int) $response->polloptionid === $option['id'],
                     'votes' => $option['votes'],
                     'percent' => $option['percent'],
                 ], $polloptions);
