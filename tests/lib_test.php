@@ -92,6 +92,20 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
+     * Tests that the two capabilities handing back other students' names, grades and free-text
+     * answers carry the RISK_PERSONAL flag, so the role-definition UI warns when they are granted.
+     *
+     * @return void
+     */
+    public function test_report_capabilities_declare_personal_data_risk(): void {
+        foreach (['mod/playervideo:viewreports', 'mod/playervideo:reviewresponses'] as $capability) {
+            $info = get_capability_info($capability);
+            $this->assertNotNull($info, $capability);
+            $this->assertSame(RISK_PERSONAL, (int) $info->riskbitmask & RISK_PERSONAL, $capability);
+        }
+    }
+
+    /**
      * Tests that add_instance() persists the submitted fields and creates a grade_item.
      *
      * @return void

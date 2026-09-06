@@ -73,6 +73,7 @@ $capabilities = [
 
     // Ability to review and grade open-question responses and AI suggestions.
     'mod/playervideo:reviewresponses' => [
+        'riskbitmask' => RISK_PERSONAL,
         'captype' => 'write',
         'contextlevel' => CONTEXT_MODULE,
         'archetypes' => [
@@ -84,6 +85,7 @@ $capabilities = [
 
     // Ability to view the analytics report.
     'mod/playervideo:viewreports' => [
+        'riskbitmask' => RISK_PERSONAL,
         'captype' => 'read',
         'contextlevel' => CONTEXT_MODULE,
         'archetypes' => [
