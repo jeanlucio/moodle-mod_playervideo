@@ -34,6 +34,7 @@ import {createTracker} from 'mod_playervideo/progress_tracker';
 import {createPlayer as createYoutubePlayer} from 'mod_playervideo/player_youtube';
 import {createPlayer as createVimeoPlayer} from 'mod_playervideo/player_vimeo';
 import {createPlayer as createHtml5Player} from 'mod_playervideo/player_html5';
+import {escapeHtmlAttribute} from 'mod_playervideo/escape';
 
 /** @var {number} How often, in ms, to heartbeat playback position to the server. */
 const HEARTBEAT_INTERVAL_MS = 12000;
@@ -829,20 +830,6 @@ const initFullscreenControl = () => {
     button.addEventListener('click', toggleFullscreen);
     document.addEventListener('fullscreenchange', updateFullscreenButton);
     document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
-};
-
-/**
- * Escapes a string for safe insertion as an HTML attribute value or text content. The
- * textContent/innerHTML round-trip alone only escapes &, < and > — quotes must be escaped
- * separately or a value placed inside a double- or single-quoted attribute can break out of it.
- *
- * @param {string} text Raw text.
- * @returns {string}
- */
-const escapeHtmlAttribute = (text) => {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 };
 
 /**

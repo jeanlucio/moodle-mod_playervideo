@@ -25,6 +25,7 @@
 import Ajax from 'core/ajax';
 import Notification from 'core/notification';
 import {getString} from 'core/str';
+import {escapeHtml} from 'mod_playervideo/escape';
 
 /**
  * Calls one mod_playervideo Web Service method directly.
@@ -34,18 +35,6 @@ import {getString} from 'core/str';
  * @returns {Promise<object>}
  */
 const call = (methodname, args) => Ajax.call([{methodname, args}])[0];
-
-/**
- * Escapes a string for safe insertion as HTML text content.
- *
- * @param {string} text Raw text.
- * @returns {string}
- */
-const escapeHtml = (text) => {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-};
 
 /**
  * Formats a number of seconds as m:ss.

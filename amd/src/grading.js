@@ -26,6 +26,7 @@
 import Ajax from 'core/ajax';
 import Notification from 'core/notification';
 import {getString} from 'core/str';
+import {escapeHtml} from 'mod_playervideo/escape';
 
 /** @var {number} The instance id this grading queue belongs to. */
 let playerVideoId = 0;
@@ -52,18 +53,6 @@ const showError = async(error) => {
         return;
     }
     Notification.exception(error);
-};
-
-/**
- * Escapes a string for safe insertion as HTML text content.
- *
- * @param {string} text Raw text.
- * @returns {string}
- */
-const escapeHtml = (text) => {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 };
 
 /**

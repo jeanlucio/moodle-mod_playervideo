@@ -34,6 +34,7 @@ import {getString} from 'core/str';
 import {createPlayer as createYoutubePlayer} from 'mod_playervideo/player_youtube';
 import {createPlayer as createVimeoPlayer} from 'mod_playervideo/player_vimeo';
 import {createPlayer as createHtml5Player} from 'mod_playervideo/player_html5';
+import {escapeHtml} from 'mod_playervideo/escape';
 
 /** @var {number} Minimum drag distance, in seconds, to bother saving a trim handle move. */
 const TRIM_DRAG_EPSILON = 0.05;
@@ -113,18 +114,6 @@ const showError = async(error) => {
         return;
     }
     Notification.exception(error);
-};
-
-/**
- * Escapes a string for safe insertion as HTML text content.
- *
- * @param {string} text Raw text.
- * @returns {string}
- */
-const escapeHtml = (text) => {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 };
 
 /**
