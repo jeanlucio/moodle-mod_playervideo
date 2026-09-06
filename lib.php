@@ -282,6 +282,19 @@ function playervideo_update_instance(stdClass $data, mixed $mform = null): bool 
         $data->videourl = null;
     }
 
+    // The reconciled video duration belongs to the old source. When the teacher swaps the
+    // video (type or URL, or re-uploads a file) it no longer applies, and there is no
+    // duration field on the form to correct it by hand — clear it so the next heartbeat
+    // resolves it afresh for the new video.
+    $previous = $DB->get_record('playervideo', ['id' => $data->id], 'videotype, videourl');
+    $sourcechanged = $previous
+        && ($previous->videotype !== $data->videotype
+            || (string) $previous->videourl !== (string) $data->videourl
+            || ($data->videotype === 'html5' && !empty($data->videofile)));
+    if ($sourcechanged) {
+        $data->duration = null;
+    }
+
     $result = $DB->update_record('playervideo', $data);
 
     if ($data->videotype === 'html5' && !empty($data->videofile)) {

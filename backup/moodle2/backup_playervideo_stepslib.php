@@ -44,6 +44,7 @@ class backup_playervideo_activity_structure_step extends backup_activity_structu
             'trimstart',
             'trimend',
             'posterdescription',
+            'duration',
             'showinline',
             'grademethod',
             'grade',

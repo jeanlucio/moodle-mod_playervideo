@@ -448,6 +448,8 @@ final class backup_restore_test extends \advanced_testcase {
         $cm = get_coursemodule_from_instance('playervideo', $instance->id, $course->id, false, MUST_EXIST);
         $context = \context_module::instance($cm->id);
 
+        $DB->set_field('playervideo', 'duration', 754.5, ['id' => $instance->id]);
+
         $fs = get_file_storage();
         $fs->create_file_from_string([
             'contextid' => $context->id, 'component' => 'mod_playervideo', 'filearea' => 'videofile',
@@ -465,6 +467,7 @@ final class backup_restore_test extends \advanced_testcase {
             'A microscope focused on a leaf cross-section.',
             $newinstance->posterdescription
         );
+        $this->assertEqualsWithDelta(754.5, (float) $newinstance->duration, 0.01);
 
         $newcm = get_coursemodule_from_instance('playervideo', $newinstance->id, $newcourse->id, false, MUST_EXIST);
         $newcontext = \context_module::instance($newcm->id);

@@ -179,6 +179,57 @@ final class save_progress_test extends \advanced_testcase {
     }
 
     /**
+     * Tests that an out-of-range duration (the classic griefing payload) is ignored outright and
+     * never becomes the shared divisor for everyone's watched percentage.
+     *
+     * @return void
+     */
+    public function test_hostile_duration_is_rejected(): void {
+        global $DB;
+
+        $result = $this->call(['lastposition' => 1, 'segments' => '[[0,1]]', 'duration' => 999999999]);
+
+        $this->assertFalse($result['error']);
+        $this->assertNull($DB->get_field('playervideo', 'duration', ['id' => $this->instance->id]));
+    }
+
+    /**
+     * Tests that once an honest duration is established, a later heartbeat cannot ratchet it
+     * upwards — a student inflating the divisor would wreck watchedpct and the engagement report
+     * for the whole class.
+     *
+     * @return void
+     */
+    public function test_established_duration_cannot_be_ratcheted_up(): void {
+        global $DB;
+
+        $this->call(['lastposition' => 60, 'segments' => '[[0,60]]', 'duration' => 600]);
+        $this->call(['lastposition' => 90, 'segments' => '[[0,90]]', 'duration' => 90000]);
+
+        $this->assertEqualsWithDelta(600.0, (float) $DB->get_field('playervideo', 'duration', [
+            'id' => $this->instance->id,
+        ]), 0.01);
+    }
+
+    /**
+     * Tests that the stored resume position is clamped to the video duration — a heartbeat
+     * cannot park lastposition (or, through it, any later divisor heuristic) at an absurd value.
+     *
+     * @return void
+     */
+    public function test_lastposition_is_clamped_to_duration(): void {
+        global $DB;
+
+        $this->call(['lastposition' => 60, 'segments' => '[[0,60]]', 'duration' => 600]);
+        $this->call(['lastposition' => 999999]);
+
+        $this->assertEqualsWithDelta(600.0, (float) $DB->get_field('playervideo_progress', 'lastposition', [
+            'playervideoid' => $this->instance->id,
+            'userid' => $this->student->id,
+        ]), 0.01);
+    }
+
+    /**
      * Tests that watchedpct is relative to the activity's own trim window, not the raw video
      * duration — a video cut to end before its real length must not require watching the
      * discarded tail to reach 100%.

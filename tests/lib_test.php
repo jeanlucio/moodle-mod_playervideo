@@ -169,6 +169,36 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
+     * Tests that swapping the video source clears the reconciled duration — it belonged to the
+     * old video and there is no form field to correct it by hand.
+     *
+     * @return void
+     */
+    public function test_update_instance_clears_duration_on_source_change(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->create_instance($course->id);
+        $DB->set_field('playervideo', 'duration', 600, ['id' => $instance->id]);
+
+        $update = $DB->get_record('playervideo', ['id' => $instance->id], '*', MUST_EXIST);
+        $update->instance = $instance->id;
+        $update->coursemodule = $instance->cmid;
+        $update->name = 'Same video, new name';
+
+        playervideo_update_instance($update);
+        $this->assertSame(600.0, (float) $DB->get_field('playervideo', 'duration', ['id' => $instance->id]));
+
+        $update = $DB->get_record('playervideo', ['id' => $instance->id], '*', MUST_EXIST);
+        $update->instance = $instance->id;
+        $update->coursemodule = $instance->cmid;
+        $update->videourl = 'https://www.youtube.com/watch?v=oHg5SJYRHA0';
+
+        playervideo_update_instance($update);
+        $this->assertNull($DB->get_field('playervideo', 'duration', ['id' => $instance->id]));
+    }
+
+    /**
      * Tests that deleting an instance also deletes every one of its child tables' rows —
      * every plugin table keyed by the instance's own ID must be cleared, not just the
      * instance's own row.

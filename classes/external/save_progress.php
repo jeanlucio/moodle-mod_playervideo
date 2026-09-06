@@ -29,6 +29,7 @@ use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
+use mod_playervideo\local\duration_resolver;
 use mod_playervideo\local\segment_tracker;
 use moodle_exception;
 use stdClass;
@@ -107,15 +108,6 @@ class save_progress extends external_api {
         }
         $incoming = is_array($incoming) ? $incoming : [];
 
-        // The video duration is a property of the shared content, not of this student's
-        // progress, so it lives on the instance itself and only ever grows: an isolated
-        // heartbeat with an incompletely-resolved player duration must never shrink the
-        // divisor used to calculate everyone else's watchedpct.
-        if ($params['duration'] > (float) $instance->duration) {
-            $DB->set_field('playervideo', 'duration', $params['duration'], ['id' => $instance->id]);
-            $instance->duration = $params['duration'];
-        }
-
         $now = time();
         $progress = $DB->get_record('playervideo_progress', [
             'playervideoid' => $attempt->playervideoid,
@@ -132,9 +124,23 @@ class save_progress extends external_api {
         }
 
         $existing = json_decode((string) $progress->segments, true);
-        $merged = segment_tracker::merge(is_array($existing) ? $existing : [], $incoming, (float) $instance->duration);
+        $clampceiling = (float) $instance->duration > 0 ? (float) $instance->duration : (float) DAYSECS;
+        $merged = segment_tracker::merge(is_array($existing) ? $existing : [], $incoming, $clampceiling);
 
-        $progress->lastposition = $params['lastposition'];
+        // The video duration is shared content, not this student's progress: it divides
+        // everyone's watchedpct and bounds the engagement report. It is written only here,
+        // from an untrusted browser value, so reconcile it against what has provably been
+        // watched instead of trusting (and permanently keeping) whatever a heartbeat sends.
+        duration_resolver::reconcile($instance, (float) $params['duration'], $merged, $DB);
+        if ((float) $instance->duration > 0) {
+            $merged = segment_tracker::normalise($merged, (float) $instance->duration);
+        }
+
+        $lastposition = max(0.0, (float) $params['lastposition']);
+        if ((float) $instance->duration > 0) {
+            $lastposition = min($lastposition, (float) $instance->duration);
+        }
+        $progress->lastposition = $lastposition;
         $progress->segments = json_encode($merged);
         $progress->watchedpct = self::calculate_watched_percent($instance, $merged);
         $progress->timemodified = $now;
