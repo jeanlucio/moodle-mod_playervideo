@@ -1255,7 +1255,7 @@ const dismissNote = async() => {
 const buildPollResultRow = (option, selectedid) => `
     <div class="playervideo-poll-result-row ${option.polloptionid === selectedid ? 'fw-bold' : ''}">
         <div class="d-flex justify-content-between">
-            <span>${option.optiontext}</span>
+            <span>${escapeHtmlAttribute(option.optiontext)}</span>
             <span>${option.percent}%</span>
         </div>
         <div class="playervideo-poll-result-bar">
@@ -1351,10 +1351,10 @@ const pauseForInteraction = async(interaction) => {
         interaction.polloptions.forEach((option) => {
             const wrapper = document.createElement('div');
             wrapper.className = 'form-check';
+            const inputid = `playervideo-poll-option-${option.id}`;
             wrapper.innerHTML = `
-                <input class="form-check-input" type="radio" name="playervideo-poll-option" value="${option.id}"
-                    id="playervideo-poll-option-${option.id}">
-                <label class="form-check-label" for="playervideo-poll-option-${option.id}">${option.text}</label>
+                <input class="form-check-input" type="radio" name="playervideo-poll-option" value="${option.id}" id="${inputid}">
+                <label class="form-check-label" for="${inputid}">${escapeHtmlAttribute(option.text)}</label>
             `;
             optionscontainer.appendChild(wrapper);
         });

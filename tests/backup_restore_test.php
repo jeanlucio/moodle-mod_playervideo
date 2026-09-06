@@ -195,6 +195,48 @@ final class backup_restore_test extends \advanced_testcase {
     }
 
     /**
+     * Restore is the one write path that does not go through save_interaction's PARAM_TEXT, so a
+     * hand-edited archive could smuggle markup into a poll option that the player then renders.
+     * The restore step must strip it, matching every other write path for that column.
+     *
+     * @return void
+     */
+    public function test_backup_restore_sanitizes_poll_option_markup(): void {
+        global $DB;
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('playervideo', ['course' => $course->id]);
+
+        $now = time();
+        $pollinteractionid = $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $instance->id, 'timestamp' => 10, 'type' => 'poll', 'weight' => 1,
+            'questionid' => null, 'notetext' => 'Pick one', 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        // Simulates what a forged .mbz would leave in the source instance before backup.
+        $DB->insert_record('playervideo_poll_options', (object) [
+            'interactionid' => $pollinteractionid,
+            'optiontext' => '<img src=x onerror=alert(1)>Red',
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $newcourse = $this->backup_and_restore_into_new_course($course);
+
+        $newinstance = $DB->get_record('playervideo', ['course' => $newcourse->id], '*', MUST_EXIST);
+        $newpollinteraction = $DB->get_record('playervideo_interactions', [
+            'playervideoid' => $newinstance->id, 'type' => 'poll',
+        ], '*', MUST_EXIST);
+        $newoption = $DB->get_record('playervideo_poll_options', [
+            'interactionid' => $newpollinteraction->id,
+        ], '*', MUST_EXIST);
+
+        $this->assertStringNotContainsString('<img', $newoption->optiontext);
+        $this->assertStringNotContainsString('onerror', $newoption->optiontext);
+        $this->assertStringContainsString('Red', $newoption->optiontext);
+    }
+
+    /**
      * A full course backup/restore must carry attempts and responses (personal data) along,
      * remapping both the multichoice answerid and the poll polloptionid to the restored
      * question/poll option — never the original ids, which belonged to the original course's

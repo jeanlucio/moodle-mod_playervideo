@@ -228,6 +228,11 @@ class restore_playervideo_activity_structure_step extends restore_activity_struc
         }
 
         $data->interactionid = $newinteractionid;
+        // The option text is PARAM_TEXT on every normal write path (save_interaction); restore is
+        // the one path that inserts it straight from the archive, so a hand-edited .mbz could
+        // smuggle markup that the player later renders. Strip it here too — a poll option is
+        // always plain text, so this only ever removes what should not have been there.
+        $data->optiontext = clean_param($data->optiontext ?? '', PARAM_TEXT);
         $data->timecreated = $this->apply_date_offset($data->timecreated);
         $data->timemodified = $this->apply_date_offset($data->timemodified);
 
