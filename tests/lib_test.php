@@ -291,7 +291,9 @@ final class lib_test extends \advanced_testcase {
 
     /**
      * Tests that get_coursemodule_info() only populates customdata when completion tracking
-     * is automatic, and carries the two rule values otherwise.
+     * is automatic, and carries the two rule values otherwise. videotype/videourl/showinline are
+     * always present, regardless of completion tracking mode — cm_info_dynamic() relies on them
+     * to skip its own database query.
      *
      * @return void
      */
@@ -300,16 +302,21 @@ final class lib_test extends \advanced_testcase {
         $instance = $this->create_instance($course->id, [
             'completionallinteractions' => 1,
             'completionwatchtoend' => 0,
+            'videotype' => 'youtube',
+            'showinline' => 1,
         ]);
 
         $automatic = (object) ['instance' => $instance->id, 'completion' => COMPLETION_TRACKING_AUTOMATIC];
         $info = playervideo_get_coursemodule_info($automatic);
         $this->assertSame(1, $info->customdata['customcompletionrules']['completionallinteractions']);
         $this->assertSame(0, $info->customdata['customcompletionrules']['completionwatchtoend']);
+        $this->assertSame('youtube', $info->customdata['videotype']);
+        $this->assertSame(1, $info->customdata['showinline']);
 
         $manual = (object) ['instance' => $instance->id, 'completion' => COMPLETION_TRACKING_MANUAL];
         $infomanual = playervideo_get_coursemodule_info($manual);
-        $this->assertNull($infomanual->customdata);
+        $this->assertArrayNotHasKey('customcompletionrules', $infomanual->customdata);
+        $this->assertSame(1, $infomanual->customdata['showinline']);
     }
 
     /**
@@ -508,7 +515,11 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
-     * An instance with "pin to course page" left off never sets any content.
+     * An instance with "pin to course page" left off never sets any content. showinline is
+     * already known from customdata (populated by get_coursemodule_info() when modinfo was
+     * built), verified directly — not by counting queries here, which is too noisy across a
+     * shared PHPUnit run (deferred cache/log writes from unrelated earlier tests land at
+     * unpredictable points); see moodle-query-baseline for that measurement instead.
      *
      * @return void
      */
@@ -516,6 +527,8 @@ final class lib_test extends \advanced_testcase {
         $course = $this->getDataGenerator()->create_course();
         $instance = $this->create_instance($course->id);
         $cminfo = $this->build_cm_info($instance);
+
+        $this->assertSame(0, $cminfo->customdata['showinline']);
 
         playervideo_cm_info_dynamic($cminfo);
 

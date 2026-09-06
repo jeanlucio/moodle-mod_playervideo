@@ -376,6 +376,13 @@ function playervideo_get_coursemodule_info(stdClass $coursemodule): cached_cm_in
     $info = new cached_cm_info();
     $info->name = $instance->name;
 
+    // Cached here so cm_info_dynamic() below — invoked on every request that touches this cm,
+    // never itself cached — does not have to re-query the same three columns, and can skip the
+    // query entirely when the inline embed is off (the common case).
+    $info->customdata['videotype'] = $instance->videotype;
+    $info->customdata['videourl'] = $instance->videourl;
+    $info->customdata['showinline'] = (int) $instance->showinline;
+
     if ($coursemodule->completion == COMPLETION_TRACKING_AUTOMATIC) {
         $info->customdata['customcompletionrules']['completionallinteractions'] =
             (int) $instance->completionallinteractions;
@@ -406,9 +413,21 @@ function playervideo_get_coursemodule_info(stdClass $coursemodule): cached_cm_in
 function playervideo_cm_info_dynamic(cm_info $cm): void {
     global $DB, $PAGE;
 
-    $instance = $DB->get_record('playervideo', ['id' => $cm->instance], 'videotype, videourl, showinline');
-    if (!$instance || empty($instance->showinline)) {
-        return;
+    // The hook above always populates these three in customdata now, so the common case (inline
+    // embed off) returns without ever touching the database. The DB fallback only matters for
+    // modinfo cached before this data existed — gone after the next rebuild, which every
+    // instance add/edit already triggers.
+    $customdata = $cm->customdata ?? [];
+    if (array_key_exists('showinline', $customdata)) {
+        if (empty($customdata['showinline'])) {
+            return;
+        }
+        $instance = (object) ['videotype' => $customdata['videotype'], 'videourl' => $customdata['videourl']];
+    } else {
+        $instance = $DB->get_record('playervideo', ['id' => $cm->instance], 'videotype, videourl, showinline');
+        if (!$instance || empty($instance->showinline)) {
+            return;
+        }
     }
 
     $context = context_module::instance($cm->id);
