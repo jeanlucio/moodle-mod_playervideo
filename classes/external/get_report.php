@@ -73,7 +73,7 @@ class get_report extends external_api {
         $userids = array_map(static fn($user): int => (int) $user->id, array_values($students));
 
         return [
-            'byquestion' => self::build_question_stats($params['playervideoid'], $context),
+            'byquestion' => self::build_question_stats($params['playervideoid'], $context, $userids),
             'bystudent' => self::build_student_stats($params['playervideoid'], $cm, $students, $userids),
             'engagement' => self::build_engagement($params['playervideoid'], $userids),
         ];
@@ -112,9 +112,12 @@ class get_report extends external_api {
      *
      * @param int $playervideoid PlayerVideo instance id.
      * @param \context $context The activity's context, for formatting question text.
+     * @param array $userids Eligible student ids, from eligible_students() — scopes both
+     *      aggregates the same way build_student_stats()/build_engagement() already do, so a
+     *      "Separate groups" restriction is honoured here too.
      * @return array Per-question rows, in timestamp order.
      */
-    private static function build_question_stats(int $playervideoid, \context $context): array {
+    private static function build_question_stats(int $playervideoid, \context $context, array $userids): array {
         global $DB;
 
         $interactions = $DB->get_records(
@@ -130,35 +133,44 @@ class get_report extends external_api {
         $questiontexts = question_service::get_question_texts($questionids, $context);
         $qtypes = $DB->get_records_list('question', 'id', $questionids, '', 'id, qtype');
 
-        $interactionids = array_map(static fn($record): int => (int) $record->id, array_values($interactions));
-        [$insql, $inparams] = $DB->get_in_or_equal($interactionids, SQL_PARAMS_NAMED, 'ids');
-
-        // A recordset, not get_records_sql(), because the grouping key (interactionid + status)
-        // is not the single first column — get_records_sql() would key the array by interactionid
-        // alone and silently drop every status but the last one for a given interaction.
-        $statusrows = $DB->get_recordset_sql(
-            "SELECT interactionid, status, COUNT(id) AS total
-               FROM {playervideo_responses}
-              WHERE interactionid $insql
-           GROUP BY interactionid, status",
-            $inparams
-        );
         $countsbyinteraction = [];
-        foreach ($statusrows as $row) {
-            $countsbyinteraction[(int) $row->interactionid][$row->status] = (int) $row->total;
-        }
-        $statusrows->close();
-
-        $correctcounts = $DB->get_records_sql(
-            "SELECT interactionid, COUNT(id) AS total
-               FROM {playervideo_responses}
-              WHERE interactionid $insql AND iscorrect = :iscorrect
-           GROUP BY interactionid",
-            array_merge($inparams, ['iscorrect' => 1])
-        );
         $correctcountbyinteraction = [];
-        foreach ($correctcounts as $row) {
-            $correctcountbyinteraction[(int) $row->interactionid] = (int) $row->total;
+
+        // An empty $userids means no student is visible to this caller (e.g. every student is in
+        // another separate group) — that is "no data", never "no filter": skip the queries rather
+        // than falling through to counting every response regardless of scope.
+        if ($userids !== []) {
+            $interactionids = array_map(static fn($record): int => (int) $record->id, array_values($interactions));
+            [$insql, $inparams] = $DB->get_in_or_equal($interactionids, SQL_PARAMS_NAMED, 'ids');
+            [$userinsql, $userinparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'uid');
+            $scopeparams = array_merge($inparams, $userinparams);
+
+            // A recordset, not get_records_sql(), because the grouping key (interactionid +
+            // status) is not the single first column — get_records_sql() would key the array by
+            // interactionid alone and silently drop every status but the last one for a given
+            // interaction.
+            $statusrows = $DB->get_recordset_sql(
+                "SELECT interactionid, status, COUNT(id) AS total
+                   FROM {playervideo_responses}
+                  WHERE interactionid $insql AND userid $userinsql
+               GROUP BY interactionid, status",
+                $scopeparams
+            );
+            foreach ($statusrows as $row) {
+                $countsbyinteraction[(int) $row->interactionid][$row->status] = (int) $row->total;
+            }
+            $statusrows->close();
+
+            $correctcounts = $DB->get_records_sql(
+                "SELECT interactionid, COUNT(id) AS total
+                   FROM {playervideo_responses}
+                  WHERE interactionid $insql AND userid $userinsql AND iscorrect = :iscorrect
+               GROUP BY interactionid",
+                array_merge($scopeparams, ['iscorrect' => 1])
+            );
+            foreach ($correctcounts as $row) {
+                $correctcountbyinteraction[(int) $row->interactionid] = (int) $row->total;
+            }
         }
 
         $result = [];

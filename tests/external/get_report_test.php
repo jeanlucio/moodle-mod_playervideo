@@ -330,4 +330,75 @@ final class get_report_test extends \advanced_testcase {
             $this->assertEqualsWithDelta(0.0, $buckets[$index], 0.001, "bucket $index");
         }
     }
+
+    /**
+     * Tests that the per-question aggregate respects the same group restriction as bystudent and
+     * engagement — a group-restricted teacher must not have another group's responses folded
+     * into totalresponses/correctcount/percentcorrect, even though no individual student is named
+     * in that row.
+     *
+     * @return void
+     */
+    public function test_byquestion_excludes_students_from_a_different_separate_group(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course(['groupmode' => SEPARATEGROUPS, 'groupmodeforce' => 1]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
+        $instance = $generator->create_instance(['course' => $course->id, 'groupmode' => SEPARATEGROUPS]);
+        $cm = get_coursemodule_from_instance('playervideo', $instance->id);
+        $context = \context_module::instance($cm->id);
+
+        $categoryid = question_service::get_or_create_category($context);
+        $formdata = (object) [
+            'name' => 'MC', 'questiontext' => ['text' => 'Pick the right one.', 'format' => FORMAT_HTML],
+            'generalfeedback' => ['text' => '', 'format' => FORMAT_HTML], 'defaultmark' => 1, 'penalty' => 0,
+        ];
+        $qtypedata = question_service::build_multichoice_formdata(
+            [['text' => 'Right', 'correct' => true], ['text' => 'Wrong', 'correct' => false]],
+            true
+        );
+        foreach (get_object_vars($qtypedata) as $field => $value) {
+            $formdata->$field = $value;
+        }
+        $questionid = question_service::create_question('multichoice', $categoryid, $context->id, $formdata);
+
+        $now = time();
+        $interactionid = $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $instance->id, 'timestamp' => 5.0, 'type' => 'question', 'weight' => 1.0,
+            'questionid' => $questionid, 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $groupone = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $grouptwo = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+
+        $studeningrouptwo = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($studeningrouptwo->id, $course->id, 'student');
+        $this->getDataGenerator()->create_group_member(['groupid' => $grouptwo->id, 'userid' => $studeningrouptwo->id]);
+
+        $teacher = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($teacher->id, $course->id, 'teacher');
+        $this->getDataGenerator()->create_group_member(['groupid' => $groupone->id, 'userid' => $teacher->id]);
+
+        // Only group two answered — correctly — and group two is invisible to this teacher.
+        $attemptid = $DB->insert_record('playervideo_attempts', (object) [
+            'playervideoid' => $instance->id, 'userid' => $studeningrouptwo->id, 'attemptnumber' => 1,
+            'status' => 'finished', 'grade' => 100.0, 'hudretrycharged' => 0,
+            'timestart' => $now, 'timefinish' => $now, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('playervideo_responses', (object) [
+            'playervideoid' => $instance->id, 'userid' => $studeningrouptwo->id, 'attemptid' => $attemptid,
+            'interactionid' => $interactionid, 'questionid' => $questionid, 'iscorrect' => 1,
+            'status' => 'answered', 'hudrewarded' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $this->setUser($teacher);
+        $result = $this->call(['playervideoid' => $instance->id]);
+
+        $this->assertFalse($result['error']);
+        $this->assertCount(1, $result['data']['byquestion']);
+        $this->assertSame(0, $result['data']['byquestion'][0]['totalresponses']);
+        $this->assertSame(0, $result['data']['byquestion'][0]['correctcount']);
+        $this->assertSame(0.0, $result['data']['byquestion'][0]['percentcorrect']);
+    }
 }

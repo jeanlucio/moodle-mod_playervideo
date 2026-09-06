@@ -30,6 +30,7 @@ use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
 use mod_playervideo\local\ai_service;
+use mod_playervideo\local\group_access;
 use mod_playervideo\local\question_service;
 use moodle_exception;
 
@@ -73,6 +74,14 @@ class generate_response_correction extends external_api {
         $context = context_module::instance($cm->id);
         self::validate_context($context);
         require_capability('mod/playervideo:reviewresponses', $context);
+
+        // Same "Separate groups" restriction review_response/get_pending_corrections/get_report/
+        // get_attempt_review already apply — otherwise a teacher without accessallgroups could
+        // send another group's student's free-text answer to an external AI provider and write
+        // aigrade/aifeedback on it.
+        if (!group_access::can_access_user($cm, $context, (int) $response->userid)) {
+            throw new moodle_exception('error_studentnotinyourgroup', 'mod_playervideo');
+        }
 
         if ($interaction->type !== 'question' || $interaction->questionid === null) {
             throw new moodle_exception('error_invalidinteractiontype', 'mod_playervideo');
