@@ -106,6 +106,19 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
+     * Tests that mod/playervideo:attempt — which lets a student persist free text
+     * (playervideo_responses.responsetext) later shown to a teacher and sent to an AI provider —
+     * carries RISK_SPAM, mirroring the equivalent core capability mod/quiz:attempt.
+     *
+     * @return void
+     */
+    public function test_attempt_capability_declares_spam_risk(): void {
+        $info = get_capability_info('mod/playervideo:attempt');
+        $this->assertNotNull($info);
+        $this->assertSame(RISK_SPAM, (int) $info->riskbitmask & RISK_SPAM);
+    }
+
+    /**
      * Tests that add_instance() persists the submitted fields and creates a grade_item.
      *
      * @return void

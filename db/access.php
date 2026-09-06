@@ -53,6 +53,7 @@ $capabilities = [
 
     // Ability to answer interactions and start/finish attempts.
     'mod/playervideo:attempt' => [
+        'riskbitmask' => RISK_SPAM,
         'captype' => 'write',
         'contextlevel' => CONTEXT_MODULE,
         'archetypes' => [
