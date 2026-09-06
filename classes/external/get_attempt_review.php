@@ -30,6 +30,7 @@ use core_external\external_function_parameters;
 use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
+use mod_playervideo\local\group_access;
 use mod_playervideo\local\question_service;
 use moodle_exception;
 
@@ -69,8 +70,21 @@ class get_attempt_review extends external_api {
 
         if ((int) $attempt->userid === (int) $USER->id) {
             require_capability('mod/playervideo:attempt', $context);
+            // A student may review only a finished attempt of their own. This function returns
+            // every option's `correct` flag and per-option feedback (get_questions_for_review),
+            // so reading an in-progress attempt back would hand out the whole answer key before
+            // the student has answered anything. Mirrors submit_answer's status guard.
+            if ($attempt->status === 'inprogress') {
+                throw new moodle_exception('error_attemptnotfinished', 'mod_playervideo');
+            }
         } else {
             require_capability('mod/playervideo:reviewresponses', $context);
+            // Same "Separate groups" restriction the sibling correction/report endpoints apply
+            // (get_pending_corrections, review_response, get_report): a teacher without
+            // moodle/site:accessallgroups must not read another group's attempt.
+            if (!group_access::can_access_user($cm, $context, (int) $attempt->userid)) {
+                throw new moodle_exception('error_studentnotinyourgroup', 'mod_playervideo');
+            }
         }
 
         $interactions = $DB->get_records(

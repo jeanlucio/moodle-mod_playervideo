@@ -95,6 +95,7 @@ $string['engagementreportheader'] = 'Linha do tempo de engajamento da turma';
 $string['error_aigenerate'] = 'A IA não conseguiu gerar uma pergunta agora. Tente novamente em instantes.';
 $string['error_aiinvalidresponse'] = 'A IA devolveu uma resposta inesperada. Tente novamente.';
 $string['error_attemptlockbusy'] = 'Outra requisição para esta tentativa já está sendo processada. Tente novamente em instantes.';
+$string['error_attemptnotfinished'] = 'Esta tentativa ainda está em andamento. A revisão fica disponível quando você finalizá-la.';
 $string['error_attemptnotinprogress'] = 'Esta tentativa não está mais em andamento.';
 $string['error_captioncontentrequired'] = 'O conteúdo da legenda é obrigatório.';
 $string['error_captionnotfound'] = 'Legenda não encontrada.';

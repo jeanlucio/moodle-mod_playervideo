@@ -95,6 +95,7 @@ $string['engagementreportheader'] = 'Class engagement timeline';
 $string['error_aigenerate'] = 'The AI could not generate a question right now. Try again in a moment.';
 $string['error_aiinvalidresponse'] = 'The AI returned an unexpected response. Try again.';
 $string['error_attemptlockbusy'] = 'Another request for this attempt is already being processed. Please try again in a moment.';
+$string['error_attemptnotfinished'] = 'This attempt is still in progress. Its review is available once you finish it.';
 $string['error_attemptnotinprogress'] = 'This attempt is no longer in progress.';
 $string['error_captioncontentrequired'] = 'Caption content is required.';
 $string['error_captionnotfound'] = 'Caption not found.';

@@ -77,6 +77,16 @@ final class get_attempt_review_test extends \advanced_testcase {
     }
 
     /**
+     * Finishes the attempt under test — its review is only available once it is finished.
+     *
+     * @return void
+     */
+    private function finish(): void {
+        $_POST['sesskey'] = sesskey();
+        external_api::call_external_function('mod_playervideo_finish_attempt', ['attemptid' => $this->attemptid]);
+    }
+
+    /**
      * Tests that a note, a correctly-answered question and a never-reached interaction are
      * each reported with the right status.
      *
@@ -124,6 +134,7 @@ final class get_attempt_review_test extends \advanced_testcase {
             'answerid' => $correctanswerid, 'responsetext' => '',
         ]);
 
+        $this->finish();
         $result = $this->call();
 
         $this->assertFalse($result['error']);
@@ -168,6 +179,7 @@ final class get_attempt_review_test extends \advanced_testcase {
             'attemptid' => $this->attemptid, 'interactionid' => $pollid, 'polloptionid' => $blueid,
         ]);
 
+        $this->finish();
         $result = $this->call();
 
         $this->assertFalse($result['error']);
@@ -206,6 +218,7 @@ final class get_attempt_review_test extends \advanced_testcase {
             'attemptid' => $this->attemptid, 'interactionid' => $noteid, 'answerid' => 0, 'responsetext' => '',
         ]);
 
+        $this->finish();
         $result = $this->call();
 
         $this->assertFalse($result['error']);
@@ -242,5 +255,76 @@ final class get_attempt_review_test extends \advanced_testcase {
         $result = get_attempt_review::execute($this->attemptid);
 
         $this->assertSame([], $result['interactions']);
+    }
+
+    /**
+     * Tests that a student cannot read their own attempt back while it is still in progress —
+     * doing so would reveal every correct answer and per-option feedback before answering.
+     *
+     * @return void
+     */
+    public function test_owner_cannot_review_an_in_progress_attempt(): void {
+        global $DB;
+
+        $now = time();
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category(['contextid' => \context_system::instance()->id]);
+        $question = $questiongenerator->create_question('truefalse', null, [
+            'category' => $category->id, 'correctanswer' => true,
+        ]);
+        $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $this->instance->id, 'timestamp' => 10, 'type' => 'question', 'weight' => 1,
+            'questionid' => $question->id, 'notetext' => null, 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $result = $this->call();
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_attemptnotfinished', $result['exception']->errorcode);
+    }
+
+    /**
+     * Tests that a teacher without moodle/site:accessallgroups cannot review the attempt of a
+     * student in a separate group they do not belong to — the same "Separate groups" rule the
+     * sibling correction/report endpoints already enforce — and can once they share a group.
+     *
+     * @return void
+     */
+    public function test_separate_groups_restricts_reviewing_another_students_attempt(): void {
+        $course = $this->getDataGenerator()->create_course(['groupmode' => SEPARATEGROUPS, 'groupmodeforce' => 1]);
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
+        $instance = $generator->create_instance(['course' => $course->id, 'groupmode' => SEPARATEGROUPS]);
+
+        $groupone = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $grouptwo = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+
+        $studentgrouptwo = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($studentgrouptwo->id, $course->id, 'student');
+        $this->getDataGenerator()->create_group_member(['groupid' => $grouptwo->id, 'userid' => $studentgrouptwo->id]);
+
+        $this->setUser($studentgrouptwo);
+        $_POST['sesskey'] = sesskey();
+        $started = external_api::call_external_function('mod_playervideo_start_attempt', ['playervideoid' => $instance->id]);
+        $otherattemptid = $started['data']['attemptid'];
+        external_api::call_external_function('mod_playervideo_finish_attempt', ['attemptid' => $otherattemptid]);
+
+        // Teacher restricted to group one, no moodle/site:accessallgroups.
+        $teacher = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($teacher->id, $course->id, 'teacher');
+        $this->getDataGenerator()->create_group_member(['groupid' => $groupone->id, 'userid' => $teacher->id]);
+        $this->setUser($teacher);
+
+        $call = function () use ($otherattemptid): array {
+            $_POST['sesskey'] = sesskey();
+            return external_api::call_external_function('mod_playervideo_get_attempt_review', ['attemptid' => $otherattemptid]);
+        };
+
+        $result = $call();
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_studentnotinyourgroup', $result['exception']->errorcode);
+
+        $this->getDataGenerator()->create_group_member(['groupid' => $grouptwo->id, 'userid' => $teacher->id]);
+        $this->assertFalse($call()['error']);
     }
 }
