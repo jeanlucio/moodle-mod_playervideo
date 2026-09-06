@@ -27,6 +27,13 @@
  */
 class restore_playervideo_activity_structure_step extends restore_activity_structure_step {
     /**
+     * @var array<int, int> Memoised {@see resolve_questionid()} results, keyed by the backed-up
+     *      question id (a zero result is cached too). The restore engine calls that method once
+     *      per response row, and a whole class's responses reference the same handful of ids.
+     */
+    private array $questionidcache = [];
+
+    /**
      * Returns the path elements the restore engine should process.
      *
      * @return restore_path_element[]
@@ -129,13 +136,16 @@ class restore_playervideo_activity_structure_step extends restore_activity_struc
         if ($oldid <= 0) {
             return 0;
         }
+        if (array_key_exists($oldid, $this->questionidcache)) {
+            return $this->questionidcache[$oldid];
+        }
 
         $mapped = (int) $this->get_mappingid('question_created', $oldid, 0);
         if ($mapped > 0) {
-            return $mapped;
+            return $this->questionidcache[$oldid] = $mapped;
         }
 
-        return $DB->record_exists('question', ['id' => $oldid]) ? $oldid : 0;
+        return $this->questionidcache[$oldid] = ($DB->record_exists('question', ['id' => $oldid]) ? $oldid : 0);
     }
 
     /**
