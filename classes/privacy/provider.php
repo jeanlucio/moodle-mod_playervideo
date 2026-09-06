@@ -27,6 +27,9 @@
  * (the question/note/poll definitions themselves), never keyed by a responding student, so
  * they carry no personal data of their own and are not declared here.
  *
+ * External locations: when the video source is YouTube or Vimeo, the student's browser loads
+ * the embed and player API straight from that service, revealing its IP and user agent.
+ *
  * @package    mod_playervideo
  * @copyright  2026 Jean Lúcio
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -112,6 +115,30 @@ class provider implements
         $collection->add_user_preference(
             intro_service::get_preference_name(),
             'privacy:metadata:preference:seenintro'
+        );
+
+        // When the teacher's source is YouTube or Vimeo, the student's browser loads the embed
+        // and the provider's player API directly from that service — the plugin's server never
+        // sends personal data there, but the browser reveals its IP and user agent, and the
+        // video id travels in the URL. The AI route is not declared here: ai_service delegates
+        // to local_aihub / core_ai, which declare their own external locations.
+        $collection->add_external_location_link(
+            'youtube',
+            [
+                'userip' => 'privacy:metadata:youtube:userip',
+                'useragent' => 'privacy:metadata:youtube:useragent',
+                'videoid' => 'privacy:metadata:youtube:videoid',
+            ],
+            'privacy:metadata:youtube'
+        );
+        $collection->add_external_location_link(
+            'vimeo',
+            [
+                'userip' => 'privacy:metadata:vimeo:userip',
+                'useragent' => 'privacy:metadata:vimeo:useragent',
+                'videoid' => 'privacy:metadata:vimeo:videoid',
+            ],
+            'privacy:metadata:vimeo'
         );
 
         return $collection;

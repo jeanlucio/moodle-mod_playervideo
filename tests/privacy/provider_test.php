@@ -156,8 +156,8 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
-     * Tests that get_metadata declares all three personal-data tables and the site-wide
-     * "seen intro" user preference.
+     * Tests that get_metadata declares all three personal-data tables, the site-wide "seen
+     * intro" user preference, and the YouTube/Vimeo embeds as external locations.
      *
      * @return void
      */
@@ -170,6 +170,31 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->assertContains('playervideo_attempts', $keys);
         $this->assertContains('playervideo_responses', $keys);
         $this->assertContains(intro_service::get_preference_name(), $keys);
+        $this->assertContains('youtube', $keys);
+        $this->assertContains('vimeo', $keys);
+    }
+
+    /**
+     * Tests that each embed external location declares what the student's browser reveals to
+     * the service (IP, user agent, video id), not silently.
+     *
+     * @return void
+     */
+    public function test_get_metadata_declares_embed_external_locations(): void {
+        $collection = provider::get_metadata(new collection('mod_playervideo'));
+
+        $links = [];
+        foreach ($collection->get_collection() as $item) {
+            if ($item instanceof \core_privacy\local\metadata\types\external_location) {
+                $links[$item->get_name()] = array_keys($item->get_privacy_fields());
+            }
+        }
+
+        foreach (['youtube', 'vimeo'] as $service) {
+            $this->assertArrayHasKey($service, $links);
+            sort($links[$service]);
+            $this->assertSame(['useragent', 'userip', 'videoid'], $links[$service]);
+        }
     }
 
     /**
