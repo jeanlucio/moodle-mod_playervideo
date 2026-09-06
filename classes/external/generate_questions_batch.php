@@ -24,6 +24,7 @@
 
 namespace mod_playervideo\external;
 
+use context;
 use context_module;
 use core_external\external_api;
 use core_external\external_function_parameters;
@@ -148,9 +149,9 @@ class generate_questions_batch extends external_api {
 
         $categoryid = question_service::get_or_create_category($modulecontext);
 
-        $created = [];
+        $saved = [];
         foreach ($candidates as $candidate) {
-            if (count($created) >= $requestcount) {
+            if (count($saved) >= $requestcount) {
                 break;
             }
             // Anchoring check: drop anything the AI invented that does not match a timestamp
@@ -172,10 +173,29 @@ class generate_questions_batch extends external_api {
                 continue;
             }
 
-            $preview = question_service::get_question_for_review($questionid, $modulecontext);
-            $created[] = [
-                'questionid' => $questionid,
-                'timestamp' => $candidate['timestamp'],
+            $saved[] = ['questionid' => $questionid, 'timestamp' => $candidate['timestamp']];
+        }
+
+        return ['candidates' => self::build_previews($saved, $modulecontext)];
+    }
+
+    /**
+     * Builds the review preview for every freshly created question in one batch — one question +
+     * one question_answers query total, instead of a pair per candidate in a loop.
+     *
+     * @param array $saved List of ['questionid' => int, 'timestamp' => int] for the created questions, in order.
+     * @param context $context The module context, for text formatting.
+     * @return array The candidate previews (questionid, timestamp, questiontext, answers), same order as $saved.
+     */
+    private static function build_previews(array $saved, context $context): array {
+        $previews = question_service::get_questions_for_review(array_column($saved, 'questionid'), $context);
+
+        $candidates = [];
+        foreach ($saved as $entry) {
+            $preview = $previews[$entry['questionid']] ?? null;
+            $candidates[] = [
+                'questionid' => $entry['questionid'],
+                'timestamp' => $entry['timestamp'],
                 'questiontext' => $preview['text'] ?? '',
                 'answers' => array_map(
                     static fn(array $a): array => ['text' => $a['text'], 'correct' => $a['correct']],
@@ -184,7 +204,7 @@ class generate_questions_batch extends external_api {
             ];
         }
 
-        return ['candidates' => $created];
+        return $candidates;
     }
 
     /**

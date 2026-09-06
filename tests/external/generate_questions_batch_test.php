@@ -285,4 +285,66 @@ final class generate_questions_batch_test extends \advanced_testcase {
 
         $this->assertStringContainsString('SAME language the transcript', $prompt);
     }
+
+    /**
+     * Tests that build_previews() resolves every created question's preview in a fixed number of
+     * queries — not one question + one question_answers query per candidate in a loop. Asserts the
+     * shape is right and that the query cost for six questions equals the cost for three.
+     *
+     * @return void
+     */
+    public function test_build_previews_resolves_every_question_without_n_plus_one(): void {
+        global $DB;
+
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category(['contextid' => \context_system::instance()->id]);
+        $context = \context_module::instance(
+            get_coursemodule_from_instance('playervideo', $this->instance->id)->id
+        );
+
+        $make = function (int $count) use ($questiongenerator, $category): array {
+            $saved = [];
+            for ($i = 0; $i < $count; $i++) {
+                $question = $questiongenerator->create_question('truefalse', null, [
+                    'category' => $category->id, 'correctanswer' => true,
+                ]);
+                $saved[] = ['questionid' => (int) $question->id, 'timestamp' => ($i + 1) * 5];
+            }
+            return $saved;
+        };
+
+        $method = new \ReflectionMethod(generate_questions_batch::class, 'build_previews');
+        $method->setAccessible(true);
+
+        $threesaved = $make(3);
+        $sixsaved = $make(6);
+
+        // Warm up any one-time filter/format setup so it does not skew the comparison.
+        $method->invoke(null, $threesaved, $context);
+
+        $before = $DB->perf_get_queries();
+        $threepreviews = $method->invoke(null, $threesaved, $context);
+        $forthree = $DB->perf_get_queries() - $before;
+
+        $before = $DB->perf_get_queries();
+        $sixpreviews = $method->invoke(null, $sixsaved, $context);
+        $forsix = $DB->perf_get_queries() - $before;
+
+        $this->assertCount(3, $threepreviews);
+        $this->assertCount(6, $sixpreviews);
+        $this->assertSame(5, $sixpreviews[0]['timestamp']);
+        $this->assertSame(30, $sixpreviews[5]['timestamp']);
+        $this->assertNotSame('', $sixpreviews[0]['questiontext']);
+        $this->assertNotEmpty($sixpreviews[0]['answers']);
+        $this->assertTrue(
+            in_array(true, array_column($sixpreviews[0]['answers'], 'correct'), true),
+            'The created truefalse question should expose which answer is correct in its preview.'
+        );
+
+        $this->assertSame(
+            $forthree,
+            $forsix,
+            "build_previews() must cost the same for six questions as for three (got {$forthree} vs {$forsix})."
+        );
+    }
 }
