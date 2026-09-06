@@ -376,6 +376,10 @@ class question_service {
      * options are shuffled (frontend only; review mode keeps DB order, matching the single-question
      * methods' own behaviour).
      *
+     * Output contract: `text`, `options[].text` and `options[].feedback` are all run through
+     * format_text() here, so every consumer (player.js, transcript.js, interactions_editor.js)
+     * renders them as HTML and must never escape them again or substitute a raw DB value.
+     *
      * @param int[] $questionids Question ids.
      * @param context $context The context for formatting the HTML text.
      * @param bool $revealanswers Whether to include 'correct'/'feedback' per option (review mode).

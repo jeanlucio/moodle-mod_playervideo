@@ -176,10 +176,15 @@ const renderQuestionBlock = async(container, block) => {
         block.question.options.forEach((option) => {
             const wrapper = document.createElement('div');
             wrapper.className = 'form-check';
+            // Question Bank content: question.text and options[].text are already run through
+            // format_text() on the server (see question_service) — render as HTML, exactly like
+            // line 163 and player.js do. Never escape it (it would show literal tags to a screen
+            // reader) and never feed a raw DB value here. Poll option text is different: it is
+            // PARAM_TEXT, not formatted, so renderPollBlock() below keeps escapeHtml().
             wrapper.innerHTML = `
                 <input class="form-check-input" type="radio" name="${inputname}" value="${option.id}"
                     id="${inputname}-${option.id}">
-                <label class="form-check-label" for="${inputname}-${option.id}">${escapeHtml(option.text)}</label>
+                <label class="form-check-label" for="${inputname}-${option.id}">${option.text}</label>
             `;
             inputscontainer.appendChild(wrapper);
         });

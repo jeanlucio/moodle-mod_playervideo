@@ -414,8 +414,10 @@ const renderBatchCandidates = async(root, modal, candidates) => {
     }
 
     results.innerHTML = candidates.map((candidate, index) => {
+        // Question Bank content: answers[].text is already run through format_text() on the
+        // server (question_service) — render as HTML, matching the AI single-question preview.
         const answerslist = candidate.answers.map(
-            (a) => `<li>${a.correct ? '<strong>' : ''}${escapeHtml(a.text)}${a.correct ? '</strong>' : ''}</li>`
+            (a) => `<li>${a.correct ? '<strong>' : ''}${a.text}${a.correct ? '</strong>' : ''}</li>`
         ).join('');
         return `
             <div class="playervideo-batch-candidate mb-2 p-2 border rounded" data-index="${index}">
