@@ -87,7 +87,7 @@ class get_di_summaries extends external_api {
             'summaries' => new external_multiple_structure(
                 new external_single_structure([
                     'lang' => new external_value(PARAM_ALPHANUMEXT, 'Language code'),
-                    'content' => new external_value(PARAM_RAW, 'Summary text'),
+                    'content' => new external_value(PARAM_TEXT, 'Summary text'),
                     'status' => new external_value(PARAM_ALPHA, 'pending | approved'),
                 ]),
                 'DI summaries visible to the current user'

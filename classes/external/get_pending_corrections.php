@@ -158,7 +158,7 @@ class get_pending_corrections extends external_api {
                         null,
                         NULL_ALLOWED
                     ),
-                    'aifeedback' => new external_value(PARAM_RAW, 'AI-suggested feedback, empty if not generated yet'),
+                    'aifeedback' => new external_value(PARAM_TEXT, 'AI-suggested feedback, empty if not generated yet'),
                     'maxgrade' => new external_value(PARAM_FLOAT, 'Maximum grade for this question (its weight)'),
                     'status' => new external_value(PARAM_ALPHANUMEXT, 'pending_ai | pending_review'),
                 ]),

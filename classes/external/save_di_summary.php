@@ -47,7 +47,7 @@ class save_di_summary extends external_api {
         return new external_function_parameters([
             'playervideoid' => new external_value(PARAM_INT, 'PlayerVideo instance id'),
             'lang' => new external_value(PARAM_RAW, 'Language code, e.g. en, pt-br'),
-            'content' => new external_value(PARAM_RAW, 'Summary text', VALUE_DEFAULT, ''),
+            'content' => new external_value(PARAM_TEXT, 'Summary text', VALUE_DEFAULT, ''),
             'approved' => new external_value(PARAM_BOOL, 'Whether to mark this summary approved', VALUE_DEFAULT, false),
             'delete' => new external_value(PARAM_BOOL, 'Whether to delete this language instead of saving', VALUE_DEFAULT, false),
         ]);

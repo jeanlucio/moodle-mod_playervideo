@@ -64,6 +64,34 @@ final class di_summary_service_test extends \advanced_testcase {
     }
 
     /**
+     * Regression test for the confirmed info finding: AI-generated (or teacher-edited) summary
+     * content is untrusted and must be stored tag-stripped, so no downstream renderer is the
+     * only thing standing between markup from an AI provider and the DOM.
+     *
+     * @return void
+     */
+    public function test_content_is_stored_without_markup(): void {
+        $course = $this->getDataGenerator()->create_course();
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
+        $instance = $generator->create_instance(['course' => $course->id]);
+
+        di_summary_service::save_generated(
+            $instance->id,
+            'en',
+            "Line one.\n<img src=x onerror=\"alert(1)\">Line two.<script>bad()</script>"
+        );
+        $stored = di_summary_service::get_summary($instance->id, 'en')->content;
+
+        $this->assertStringNotContainsString('<img', $stored);
+        $this->assertStringNotContainsString('<script', $stored);
+        $this->assertStringNotContainsString('onerror', $stored);
+        $this->assertStringContainsString('Line one.', $stored);
+        $this->assertStringContainsString('Line two.', $stored);
+        // Line breaks in the easy-read text are kept — only tags are removed.
+        $this->assertStringContainsString("\n", $stored);
+    }
+
+    /**
      * Tests that save_reviewed() sets status by the approved flag, in both directions.
      *
      * @return void

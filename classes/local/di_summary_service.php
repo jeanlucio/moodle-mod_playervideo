@@ -122,6 +122,11 @@ final class di_summary_service {
     private static function upsert(int $playervideoid, string $lang, string $content, string $status): void {
         global $DB;
 
+        // The content is either straight from an AI provider (save_generated) or a teacher's
+        // edit of it (save_reviewed) — untrusted either way. Strip markup before storing so no
+        // renderer downstream has to be the only thing standing between it and the DOM.
+        $content = clean_param($content, PARAM_TEXT);
+
         $existing = $DB->get_record('playervideo_disummaries', ['playervideoid' => $playervideoid, 'lang' => $lang]);
 
         if ($existing) {

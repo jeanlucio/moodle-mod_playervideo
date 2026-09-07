@@ -115,10 +115,16 @@ class generate_response_correction extends external_api {
         $weight = (float) $interaction->weight;
         $aigrade = $parsed['score'] * $weight;
 
+        // AI output is untrusted input: strip any markup before it is stored, so a hostile or
+        // compromised provider cannot land HTML in playervideo_responses.aifeedback for a future
+        // renderer to trust. The feedback is a short plain-text comment; PARAM_TEXT keeps its
+        // wording and line breaks and drops tags.
+        $aifeedback = clean_param($parsed['feedback'], PARAM_TEXT);
+
         $DB->update_record('playervideo_responses', (object) [
             'id' => $response->id,
             'aigrade' => $aigrade,
-            'aifeedback' => $parsed['feedback'],
+            'aifeedback' => $aifeedback,
             'status' => 'pending_review',
             'timemodified' => time(),
         ]);
@@ -126,7 +132,7 @@ class generate_response_correction extends external_api {
         return [
             'responseid' => (int) $response->id,
             'aigrade' => $aigrade,
-            'aifeedback' => $parsed['feedback'],
+            'aifeedback' => $aifeedback,
             'maxgrade' => $weight,
         ];
     }
@@ -197,7 +203,7 @@ class generate_response_correction extends external_api {
         return new external_single_structure([
             'responseid' => new external_value(PARAM_INT, 'playervideo_responses id'),
             'aigrade' => new external_value(PARAM_FLOAT, 'AI-suggested grade, already scaled to the question weight'),
-            'aifeedback' => new external_value(PARAM_RAW, 'AI-suggested feedback comment'),
+            'aifeedback' => new external_value(PARAM_TEXT, 'AI-suggested feedback comment'),
             'maxgrade' => new external_value(PARAM_FLOAT, 'Maximum grade for this question (its weight)'),
         ]);
     }
