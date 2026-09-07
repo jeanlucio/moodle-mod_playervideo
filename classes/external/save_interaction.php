@@ -139,6 +139,18 @@ class save_interaction extends external_api {
             throw new moodle_exception('error_invalidinteractiontype', 'mod_playervideo');
         }
 
+        // Changing the type of an interaction that already has responses orphans them: a poll
+        // vote's polloptionid points at an option row this edit would then delete, and a
+        // question left with a pending correction can never be graded (review_response only
+        // accepts type 'question'). The delete branch and save_poll_options() already refuse to
+        // touch an interaction with responses — the type-change edit must too.
+        $typechangewithresponses = $existing !== null
+            && $existing->type !== $params['type']
+            && $DB->record_exists('playervideo_responses', ['interactionid' => $existing->id]);
+        if ($typechangewithresponses) {
+            throw new moodle_exception('error_interactionhasresponses', 'mod_playervideo');
+        }
+
         $trimmedoptions = array_map('trim', $params['polloptions']);
         $polloptions = array_values(array_filter($trimmedoptions, static fn(string $option): bool => $option !== ''));
 

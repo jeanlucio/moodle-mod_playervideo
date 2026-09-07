@@ -550,6 +550,70 @@ final class save_interaction_test extends \advanced_testcase {
     }
 
     /**
+     * Regression test for the confirmed low finding: changing an interaction's type is refused
+     * once it has responses. Otherwise this edit path deletes the poll's options (orphaning
+     * every vote's polloptionid) or turns a question with a pending correction into a note that
+     * review_response can no longer grade — neither reachable through the UI, but both through a
+     * direct web service call.
+     *
+     * @return void
+     */
+    public function test_cannot_change_type_of_an_interaction_with_responses(): void {
+        global $DB;
+
+        $instance = $this->make_instance();
+        $created = $this->call([
+            'playervideoid' => $instance->id,
+            'timestamp' => 30,
+            'type' => 'poll',
+            'notetext' => 'Poll prompt?',
+            'polloptions' => ['Red', 'Blue'],
+        ]);
+        $interactionid = $created['data']['interactionid'];
+        $blueid = $DB->get_field('playervideo_poll_options', 'id', [
+            'interactionid' => $interactionid, 'optiontext' => 'Blue',
+        ]);
+
+        $now = time();
+        $attemptid = $DB->insert_record('playervideo_attempts', (object) [
+            'playervideoid' => $instance->id, 'userid' => 2, 'attemptnumber' => 1, 'status' => 'inprogress',
+            'grade' => null, 'hudretrycharged' => 0, 'timestart' => $now, 'timefinish' => null,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('playervideo_responses', (object) [
+            'playervideoid' => $instance->id, 'userid' => 2, 'attemptid' => $attemptid,
+            'interactionid' => $interactionid, 'questionid' => null, 'answerid' => null,
+            'polloptionid' => $blueid, 'responsetext' => null, 'iscorrect' => null, 'hudrewarded' => 0,
+            'aigrade' => null, 'aifeedback' => null, 'teachergrade' => null, 'teacherfeedback' => null,
+            'status' => 'voted', 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $result = $this->call([
+            'playervideoid' => $instance->id,
+            'interactionid' => $interactionid,
+            'timestamp' => 30,
+            'type' => 'note',
+            'notetext' => 'Now just a note.',
+        ]);
+
+        $this->assertTrue($result['error']);
+        $this->assertSame('error_interactionhasresponses', $result['exception']->errorcode);
+        $this->assertSame('poll', $DB->get_field('playervideo_interactions', 'type', ['id' => $interactionid]));
+        $this->assertSame(2, $DB->count_records('playervideo_poll_options', ['interactionid' => $interactionid]));
+
+        // Editing the same poll without changing its type is still fine (prompt text only).
+        $ok = $this->call([
+            'playervideoid' => $instance->id,
+            'interactionid' => $interactionid,
+            'timestamp' => 30,
+            'type' => 'poll',
+            'notetext' => 'Reworded prompt?',
+            'polloptions' => ['Red', 'Blue'],
+        ]);
+        $this->assertFalse($ok['error']);
+    }
+
+    /**
      * Tests that deleting a poll interaction also deletes its options.
      *
      * @return void
