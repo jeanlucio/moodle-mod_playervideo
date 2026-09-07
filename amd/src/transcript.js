@@ -19,6 +19,10 @@
  * submit_answer/finish_attempt) the video player uses — a first-class alternate route, not an
  * adaptation of the video screen.
  *
+ * The document is rendered read-only on load; the attempt (and any PlayerHUD retry cost) opens
+ * only when the student presses "Start attempt"/"Resume attempt", the same on-gesture contract
+ * player.js keeps for the video route.
+ *
  * @module     mod_playervideo/transcript
  * @copyright  2026 Jean Lúcio
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -101,15 +105,58 @@ const renderTreatedBadge = async(container, labelkey) => {
 };
 
 /**
+ * Lists a question's or poll's options as static, disabled radios — the read-only preview
+ * shown before the student starts the attempt, so a screen-reader user can read the whole
+ * document (exactly as the video route shows the video before play) without an attempt, and
+ * therefore without spending a maxattempts slot or a PlayerHUD retry cost.
+ *
+ * @param {HTMLElement} container Element to append to.
+ * @param {Array} options The option list ({id, text} entries).
+ * @param {boolean} isPoll Whether these are poll options (PARAM_TEXT, escaped) rather than
+ *     Question Bank options (already format_text()'d server-side, rendered as HTML).
+ */
+const renderReadonlyOptions = (container, options, isPoll) => {
+    if (!options || options.length === 0) {
+        return;
+    }
+    const list = document.createElement('div');
+    list.className = 'mb-2';
+    options.forEach((option) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'form-check';
+        const label = document.createElement('label');
+        label.className = 'form-check-label';
+        if (isPoll) {
+            label.textContent = option.text;
+        } else {
+            label.innerHTML = option.text;
+        }
+        const input = document.createElement('input');
+        input.className = 'form-check-input';
+        input.type = 'radio';
+        input.disabled = true;
+        wrapper.appendChild(input);
+        wrapper.appendChild(label);
+        list.appendChild(wrapper);
+    });
+    container.appendChild(list);
+};
+
+/**
  * Renders one note interaction: the note text and a "Continue" button that marks it viewed.
  *
  * @param {HTMLElement} container Element to append to.
  * @param {object} block A {kind: 'interaction', type: 'note', ...} block.
+ * @param {boolean} interactive Whether the attempt is open (answer controls live) or not.
  */
-const renderNoteBlock = async(container, block) => {
+const renderNoteBlock = async(container, block, interactive) => {
     const body = document.createElement('div');
     body.innerHTML = block.notetext;
     container.appendChild(body);
+
+    if (!interactive) {
+        return;
+    }
 
     if (treatedInteractionIds.has(block.id)) {
         await renderTreatedBadge(container, 'alreadytreated');
@@ -146,11 +193,17 @@ const renderNoteBlock = async(container, block) => {
  *
  * @param {HTMLElement} container Element to append to.
  * @param {object} block A {kind: 'interaction', type: 'question', question, id} block.
+ * @param {boolean} interactive Whether the attempt is open (answer controls live) or not.
  */
-const renderQuestionBlock = async(container, block) => {
+const renderQuestionBlock = async(container, block, interactive) => {
     const body = document.createElement('div');
     body.innerHTML = block.question.text;
     container.appendChild(body);
+
+    if (!interactive) {
+        renderReadonlyOptions(container, block.question.options, false);
+        return;
+    }
 
     if (treatedInteractionIds.has(block.id)) {
         await renderTreatedBadge(container, 'alreadytreated');
@@ -243,11 +296,17 @@ const renderQuestionBlock = async(container, block) => {
  *
  * @param {HTMLElement} container Element to append to.
  * @param {object} block A {kind: 'interaction', type: 'poll', notetext, polloptions, id} block.
+ * @param {boolean} interactive Whether the attempt is open (answer controls live) or not.
  */
-const renderPollBlock = async(container, block) => {
+const renderPollBlock = async(container, block, interactive) => {
     const body = document.createElement('div');
     body.innerHTML = block.notetext;
     container.appendChild(body);
+
+    if (!interactive) {
+        renderReadonlyOptions(container, block.polloptions, true);
+        return;
+    }
 
     if (treatedInteractionIds.has(block.id)) {
         await renderTreatedBadge(container, 'alreadytreated');
@@ -303,9 +362,11 @@ const renderPollBlock = async(container, block) => {
 /**
  * Renders every block of the document into #playervideo-transcript-blocks, in order.
  *
+ * @param {boolean} interactive Whether the attempt is open — answer controls and the finish
+ *     button are only wired when true; otherwise the document is a static read-only preview.
  * @returns {Promise<void>}
  */
-const renderBlocks = async() => {
+const renderBlocks = async(interactive) => {
     const container = document.getElementById('playervideo-transcript-blocks');
     container.innerHTML = '';
 
@@ -327,15 +388,17 @@ const renderBlocks = async() => {
         container.appendChild(wrapper);
 
         if (block.type === 'note') {
-            await renderNoteBlock(wrapper, block);
+            await renderNoteBlock(wrapper, block, interactive);
         } else if (block.type === 'poll') {
-            await renderPollBlock(wrapper, block);
+            await renderPollBlock(wrapper, block, interactive);
         } else {
-            await renderQuestionBlock(wrapper, block);
+            await renderQuestionBlock(wrapper, block, interactive);
         }
     }
 
-    document.getElementById('playervideo-transcript-finish-btn').hidden = false;
+    if (interactive) {
+        document.getElementById('playervideo-transcript-finish-btn').hidden = false;
+    }
 };
 
 /**
@@ -375,23 +438,55 @@ const finishAttempt = async() => {
 const readTranscriptData = () => JSON.parse(document.getElementById('playervideo-transcript-data').textContent);
 
 /**
- * Initialises the text-only page: starts/resumes the attempt (same lifecycle as the video
- * player) and renders the merged document.
+ * Opens (or resumes) the attempt on the student's explicit click, then re-renders the document
+ * with the answer controls live. Kept out of init() so loading the page never spends a
+ * maxattempts slot or a PlayerHUD retry cost — the same contract amd/src/player.js's
+ * beginAttempt() keeps for the video route.
+ *
+ * @returns {Promise<void>}
+ */
+const beginAttempt = async() => {
+    const startbutton = document.getElementById('playervideo-transcript-start-btn');
+    startbutton.disabled = true;
+    try {
+        const started = await call('mod_playervideo_start_attempt', {playervideoid: transcriptData.playervideoid});
+        attemptId = started.attemptid;
+        treatedInteractionIds = new Set(started.treatedinteractionids);
+
+        startbutton.hidden = true;
+        await renderBlocks(true);
+
+        const finishbutton = document.getElementById('playervideo-transcript-finish-btn');
+        finishbutton.addEventListener('click', finishAttempt);
+        announce(await getString('attemptstarted', 'mod_playervideo'));
+    } catch (error) {
+        startbutton.disabled = false;
+        showError(error);
+    }
+};
+
+/**
+ * Initialises the text-only page: renders the merged document read-only, then either offers a
+ * "Start attempt"/"Resume attempt" button or, when no attempt is left, a plain notice.
  *
  * @returns {Promise<void>}
  */
 export const init = async() => {
     transcriptData = readTranscriptData();
 
-    try {
-        const started = await call('mod_playervideo_start_attempt', {playervideoid: transcriptData.playervideoid});
-        attemptId = started.attemptid;
-        treatedInteractionIds = new Set(started.treatedinteractionids);
+    await renderBlocks(false);
 
-        await renderBlocks();
+    const startbutton = document.getElementById('playervideo-transcript-start-btn');
 
-        document.getElementById('playervideo-transcript-finish-btn').addEventListener('click', finishAttempt);
-    } catch (error) {
-        showError(error);
+    if (!transcriptData.hasopenattempt && !transcriptData.canstartnew) {
+        const notice = document.getElementById('playervideo-transcript-notice');
+        notice.textContent = await getString('error_noattemptsleft', 'mod_playervideo');
+        notice.hidden = false;
+        return;
     }
+
+    const labelkey = transcriptData.hasopenattempt ? 'resumeattempt' : 'startattempt';
+    startbutton.textContent = await getString(labelkey, 'mod_playervideo');
+    startbutton.hidden = false;
+    startbutton.addEventListener('click', beginAttempt);
 };

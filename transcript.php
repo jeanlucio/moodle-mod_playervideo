@@ -25,6 +25,7 @@
 
 require(__DIR__ . '/../../config.php');
 
+use mod_playervideo\local\attempt_manager;
 use mod_playervideo\local\transcript_service;
 
 $id = required_param('id', PARAM_INT);
@@ -36,6 +37,8 @@ $context = context_module::instance($cm->id);
 require_login($course, true, $cm);
 require_capability('mod/playervideo:attempt', $context);
 
+$userid = (int) $USER->id;
+
 $PAGE->set_url('/mod/playervideo/transcript.php', ['id' => $cm->id]);
 $PAGE->set_title($instance->name);
 $PAGE->set_heading($course->fullname);
@@ -44,9 +47,18 @@ $PAGE->requires->css('/mod/playervideo/styles.css');
 
 $blocks = transcript_service::build_document($instance, $context);
 
+// The attempt is never opened just by loading this page — mirroring the video route, where
+// mod_playervideo_start_attempt (and any PlayerHUD retry cost it charges) only fires on the
+// student's first play click, never speculatively. transcript.js renders the document read-only
+// and calls start_attempt only when the student presses "Start attempt"/"Resume attempt".
+$openattempt = attempt_manager::get_open_attempt($instance->id, $userid);
+$hasopenattempt = $openattempt !== null && $openattempt->status === 'inprogress';
+
 $transcriptdata = [
     'playervideoid' => (int) $instance->id,
     'blocks' => $blocks,
+    'hasopenattempt' => $hasopenattempt,
+    'canstartnew' => attempt_manager::can_start_new_attempt($instance->id, $userid, (int) $instance->maxattempts),
 ];
 
 echo $OUTPUT->header();
