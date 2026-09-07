@@ -481,21 +481,19 @@ class question_service {
     }
 
     /**
-     * Returns the ids of question categories' contexts the current user may reuse a question
-     * from, for a "pull from bank" picker scoped to the given course module: the course context,
-     * its parents, and every sibling activity's module context in the same course, filtered to
-     * those where the user actually holds moodle/question:useall or moodle/question:usemine —
-     * mirroring the category resolution already used by mod_playerpuzzle's mod_form.php.
-     *
-     * Shared by {@see \mod_playervideo\external\search_questions} (to build the picker's own
-     * results) and {@see question_belongs_to_reusable_category()} (to reject, server-side, a
-     * questionid whose category the caller cannot reach — closing the gap a raw web service call
-     * could otherwise use to bypass the picker's own filtering).
+     * Returns the question-category contexts the current user may pull a reusable question from,
+     * for a "pull from bank" picker scoped to the given course module: the course context, its
+     * parents, and every sibling activity's module context in the same course — split by how far
+     * the permission reaches. A "useall" context exposes every question in it; a "usemine"
+     * context only questions the current user authored, the same distinction core's
+     * {@see question_has_capability_on()} makes for the "use" capability. A context granting
+     * both is listed only under "useall".
      *
      * @param stdClass $cm Course module record for the PlayerVideo instance.
-     * @return int[] Valid context ids, empty if the user may not reuse any question here.
+     * @return array Two int[] lists keyed "useall" and "usemine"; both empty if the user may not
+     *      reuse any question here.
      */
-    public static function get_reusable_question_context_ids(stdClass $cm): array {
+    public static function get_reusable_question_contexts(stdClass $cm): array {
         $coursecontext = context_course::instance($cm->course);
         $contextstocheck = [];
         foreach ($coursecontext->get_parent_contexts(true) as $ctx) {
@@ -508,14 +506,31 @@ class question_service {
             $contextstocheck[$othercontext->id] = $othercontext;
         }
 
-        $validcontextids = [];
+        $contexts = ['useall' => [], 'usemine' => []];
         foreach ($contextstocheck as $ctx) {
-            if (has_capability('moodle/question:useall', $ctx) || has_capability('moodle/question:usemine', $ctx)) {
-                $validcontextids[] = $ctx->id;
+            if (has_capability('moodle/question:useall', $ctx)) {
+                $contexts['useall'][] = $ctx->id;
+            } else if (has_capability('moodle/question:usemine', $ctx)) {
+                $contexts['usemine'][] = $ctx->id;
             }
         }
 
-        return $validcontextids;
+        return $contexts;
+    }
+
+    /**
+     * Returns every context id from {@see get_reusable_question_contexts()} as one flat list —
+     * the coarse "can the caller reach this category at all" gate. The finer per-question
+     * ownership rule for a "usemine"-only context is applied by the callers: the picker SQL in
+     * {@see \mod_playervideo\external\search_questions} and the delegation to
+     * {@see question_has_capability_on()} in {@see question_belongs_to_reusable_category()}.
+     *
+     * @param stdClass $cm Course module record for the PlayerVideo instance.
+     * @return int[] Valid context ids, empty if the user may not reuse any question here.
+     */
+    public static function get_reusable_question_context_ids(stdClass $cm): array {
+        $contexts = self::get_reusable_question_contexts($cm);
+        return array_merge($contexts['useall'], $contexts['usemine']);
     }
 
     /**
@@ -533,7 +548,7 @@ class question_service {
      * @return bool True if the question exists in a category among the reusable contexts.
      */
     public static function question_belongs_to_reusable_category(int $questionid, stdClass $cm): bool {
-        global $DB;
+        global $CFG, $DB;
 
         $contextids = self::get_reusable_question_context_ids($cm);
         if (empty($contextids)) {
@@ -551,7 +566,18 @@ class question_service {
                  WHERE q.id = :questionid
                    AND qc.contextid $contextinsql";
 
-        return $DB->record_exists_sql($sql, $contextparams);
+        if (!$DB->record_exists_sql($sql, $contextparams)) {
+            return false;
+        }
+
+        // The query above is the coarse gate (is the category reachable from this cm at all).
+        // The fine one is core's own: "use" is granted by moodle/question:useall, or by
+        // moodle/question:usemine only for a question the caller authored — a "usemine"-only
+        // context must not hand a colleague's question to the timeline. question_has_capability_on()
+        // is a legacy global in lib/questionlib.php, not autoloaded.
+        require_once($CFG->libdir . '/questionlib.php');
+
+        return question_has_capability_on($questionid, 'use');
     }
 
     /**

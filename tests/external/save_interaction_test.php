@@ -177,6 +177,54 @@ final class save_interaction_test extends \advanced_testcase {
     }
 
     /**
+     * Regression test for the confirmed low finding: in a context where the caller holds only
+     * moodle/question:usemine (not useall), a colleague's question must be rejected even though
+     * its category is reachable — matching core's question_has_capability_on('use') rule — while
+     * the caller's own question in that same context is still accepted.
+     *
+     * @return void
+     */
+    public function test_usemine_context_rejects_a_colleagues_question_but_accepts_own(): void {
+        global $DB;
+
+        $instance = $this->make_instance();
+
+        $coursecontext = \context_course::instance($this->course->id);
+        $teacherrole = $DB->get_record('role', ['shortname' => 'editingteacher'], '*', MUST_EXIST);
+        role_change_permission($teacherrole->id, $coursecontext, 'moodle/question:useall', CAP_PREVENT);
+        role_change_permission($teacherrole->id, $coursecontext, 'moodle/question:usemine', CAP_ALLOW);
+        accesslib_clear_all_caches_for_unit_testing();
+
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category(['contextid' => $coursecontext->id]);
+
+        $colleague = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($colleague->id, $this->course->id, 'editingteacher');
+        $this->setUser($colleague);
+        $colleaguequestion = $questiongenerator->create_question('multichoice', 'one_of_four', ['category' => $category->id]);
+
+        $this->setUser($this->teacher);
+        $ownquestion = $questiongenerator->create_question('truefalse', 'true', ['category' => $category->id]);
+
+        $rejected = $this->call([
+            'playervideoid' => $instance->id,
+            'timestamp' => 5,
+            'type' => 'question',
+            'questionid' => $colleaguequestion->id,
+        ]);
+        $this->assertTrue($rejected['error']);
+        $this->assertSame('error_questioncategorynotallowed', $rejected['exception']->errorcode);
+
+        $accepted = $this->call([
+            'playervideoid' => $instance->id,
+            'timestamp' => 6,
+            'type' => 'question',
+            'questionid' => $ownquestion->id,
+        ]);
+        $this->assertFalse($accepted['error']);
+    }
+
+    /**
      * Tests that an empty note is rejected.
      *
      * @return void

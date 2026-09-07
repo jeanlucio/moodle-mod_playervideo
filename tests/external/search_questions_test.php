@@ -114,4 +114,48 @@ final class search_questions_test extends \advanced_testcase {
         $this->assertFalse($result['error']);
         $this->assertSame([], $result['data']['questions']);
     }
+
+    /**
+     * Regression test for the confirmed low finding: in a context where the caller holds only
+     * moodle/question:usemine (not useall), the picker must list the caller's own questions and
+     * never a colleague's — matching core's own question_has_capability_on('use') rule, which
+     * the previous context-only filter ignored.
+     *
+     * @return void
+     */
+    public function test_usemine_context_lists_only_the_callers_own_questions(): void {
+        global $DB;
+
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_playervideo');
+        $instance = $generator->create_instance(['course' => $this->course->id]);
+
+        $coursecontext = \context_course::instance($this->course->id);
+        $teacherrole = $DB->get_record('role', ['shortname' => 'editingteacher'], '*', MUST_EXIST);
+        role_change_permission($teacherrole->id, $coursecontext, 'moodle/question:useall', CAP_PREVENT);
+        role_change_permission($teacherrole->id, $coursecontext, 'moodle/question:usemine', CAP_ALLOW);
+        accesslib_clear_all_caches_for_unit_testing();
+
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        $category = $questiongenerator->create_question_category(['contextid' => $coursecontext->id]);
+
+        $colleague = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($colleague->id, $this->course->id, 'editingteacher');
+        $this->setUser($colleague);
+        $questiongenerator->create_question('multichoice', 'one_of_four', [
+            'category' => $category->id,
+            'questiontext' => ['text' => 'Colleague authored this one', 'format' => FORMAT_HTML],
+        ]);
+
+        $this->setUser($this->teacher);
+        $questiongenerator->create_question('truefalse', 'true', [
+            'category' => $category->id,
+            'questiontext' => ['text' => 'The caller authored this one', 'format' => FORMAT_HTML],
+        ]);
+
+        $result = $this->call(['playervideoid' => $instance->id]);
+
+        $this->assertFalse($result['error']);
+        $this->assertCount(1, $result['data']['questions']);
+        $this->assertStringContainsString('The caller authored this one', $result['data']['questions'][0]['preview']);
+    }
 }

@@ -34,9 +34,10 @@ use mod_playervideo\local\question_service;
 
 /**
  * Lists existing multichoice/truefalse questions the teacher is allowed to reuse, for the
- * "puxar do banco" timeline picker — the category resolution itself lives in
- * {@see question_service::get_reusable_question_context_ids()}, shared with the server-side
- * re-validation save_interaction applies to whatever questionid is actually persisted.
+ * "pull from bank" timeline picker. The reachable contexts come from
+ * {@see question_service::get_reusable_question_contexts()}, split into "useall" (every
+ * question) and "usemine" (only the caller's own) so the picker never offers what
+ * save_interaction's per-question re-check would then reject.
  */
 class search_questions extends external_api {
     /** @var int Maximum results returned, regardless of the requested limit. */
@@ -64,7 +65,7 @@ class search_questions extends external_api {
      * @return array Matching questions.
      */
     public static function execute(int $playervideoid, string $query, int $limit): array {
-        global $DB;
+        global $DB, $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'playervideoid' => $playervideoid,
@@ -77,24 +78,39 @@ class search_questions extends external_api {
         self::validate_context($modcontext);
         require_capability('mod/playervideo:manage', $modcontext);
 
-        $validcontextids = question_service::get_reusable_question_context_ids($cm);
-        if (empty($validcontextids)) {
+        $contexts = question_service::get_reusable_question_contexts($cm);
+        if (empty($contexts['useall']) && empty($contexts['usemine'])) {
             return ['questions' => []];
         }
 
         $limit = min(self::MAX_LIMIT, max(1, $params['limit']));
 
-        [$contextinsql, $contextparams] = $DB->get_in_or_equal($validcontextids, SQL_PARAMS_NAMED, 'ctx');
         [$qtypeinsql, $qtypeparams] = $DB->get_in_or_equal(['multichoice', 'truefalse'], SQL_PARAMS_NAMED, 'qtype');
-        $sqlparams = array_merge($contextparams, $qtypeparams);
+        $sqlparams = $qtypeparams;
+
+        // A "useall" context exposes every question in it; a "usemine" context only the caller's
+        // own — the same split core applies to the "use" capability, and the same one
+        // save_interaction re-checks per question before persisting a picked id.
+        $scopeclauses = [];
+        if (!empty($contexts['useall'])) {
+            [$insql, $inparams] = $DB->get_in_or_equal($contexts['useall'], SQL_PARAMS_NAMED, 'ctxall');
+            $scopeclauses[] = "qc.contextid $insql";
+            $sqlparams = array_merge($sqlparams, $inparams);
+        }
+        if (!empty($contexts['usemine'])) {
+            [$insql, $inparams] = $DB->get_in_or_equal($contexts['usemine'], SQL_PARAMS_NAMED, 'ctxmine');
+            $scopeclauses[] = "(qc.contextid $insql AND q.createdby = :userid)";
+            $sqlparams = array_merge($sqlparams, $inparams);
+            $sqlparams['userid'] = $USER->id;
+        }
 
         $sql = "SELECT q.id, q.qtype, q.questiontext, q.questiontextformat
                   FROM {question} q
                   JOIN {question_versions} qv ON qv.questionid = q.id AND qv.status = 'ready'
                   JOIN {question_bank_entries} qbe ON qbe.id = qv.questionbankentryid
                   JOIN {question_categories} qc ON qc.id = qbe.questioncategoryid
-                 WHERE qc.contextid $contextinsql
-                   AND q.qtype $qtypeinsql";
+                 WHERE q.qtype $qtypeinsql
+                   AND (" . implode(' OR ', $scopeclauses) . ")";
 
         if (trim($params['query']) !== '') {
             $sql .= ' AND ' . $DB->sql_like('q.questiontext', ':query', false, false);
