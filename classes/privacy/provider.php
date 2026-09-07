@@ -343,6 +343,7 @@ class provider implements
                 'watchedpct' => $progress->watchedpct,
                 'watchedtoend' => transform::yesno($progress->watchedtoend),
                 'segments' => $progress->segments,
+                'timecreated' => transform::datetime($progress->timecreated),
                 'timemodified' => transform::datetime($progress->timemodified),
             ]
         );
@@ -367,6 +368,8 @@ class provider implements
                 'hudretrycharged' => transform::yesno($attempt->hudretrycharged),
                 'timestart' => transform::datetime($attempt->timestart),
                 'timefinish' => $attempt->timefinish ? transform::datetime($attempt->timefinish) : null,
+                'timecreated' => transform::datetime($attempt->timecreated),
+                'timemodified' => transform::datetime($attempt->timemodified),
             ];
         }, $attempts));
 
@@ -389,6 +392,7 @@ class provider implements
 
         $rows = array_values(array_map(static function (\stdClass $response): array {
             return [
+                'attemptid' => (int) $response->attemptid,
                 'interactionid' => (int) $response->interactionid,
                 'questionid' => $response->questionid !== null ? (int) $response->questionid : null,
                 'answerid' => $response->answerid !== null ? (int) $response->answerid : null,
@@ -402,6 +406,7 @@ class provider implements
                 'teacherfeedback' => $response->teacherfeedback,
                 'status' => $response->status,
                 'timecreated' => transform::datetime($response->timecreated),
+                'timemodified' => transform::datetime($response->timemodified),
             ];
         }, $responses));
 

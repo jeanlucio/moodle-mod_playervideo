@@ -353,6 +353,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         ]);
         $this->assertEquals(42.5, (float) $progressdata->lastposition);
         $this->assertSame('[[0,42.5]]', $progressdata->segments);
+        $this->assertNotEmpty($progressdata->timecreated);
 
         $attemptsdata = writer::with_context($context)->get_data([
             get_string('pluginname', 'mod_playervideo'),
@@ -361,6 +362,8 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->assertNotEmpty($attemptsdata->attempts);
         $this->assertSame(90.0, (float) $attemptsdata->attempts[0]['grade']);
         $this->assertSame('No', $attemptsdata->attempts[0]['hudretrycharged']);
+        $this->assertNotEmpty($attemptsdata->attempts[0]['timecreated']);
+        $this->assertNotEmpty($attemptsdata->attempts[0]['timemodified']);
 
         $responsesdata = writer::with_context($context)->get_data([
             get_string('pluginname', 'mod_playervideo'),
@@ -368,6 +371,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         ]);
         $this->assertNotEmpty($responsesdata->responses);
         $response = $responsesdata->responses[0];
+        $this->assertSame($attemptid, (int) $response['attemptid']);
         $this->assertSame('Minha resposta', $response['responsetext']);
         $this->assertSame($interactionid, (int) $response['interactionid']);
         $this->assertSame(501, (int) $response['questionid']);
@@ -377,6 +381,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->assertEquals(0.75, (float) $response['aigrade']);
         $this->assertSame('AI: good start.', $response['aifeedback']);
         $this->assertEquals(0.9, (float) $response['teachergrade']);
+        $this->assertNotEmpty($response['timemodified']);
     }
 
     /**
