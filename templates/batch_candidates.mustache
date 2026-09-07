@@ -1,0 +1,52 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_playervideo/batch_candidates
+
+    The accept/discard list of AI-generated question candidates in the "generate from
+    transcript" modal. Rendered client-side via core/templates from
+    amd/src/interactions_editor.js, which then wires the Accept and Discard buttons per row by
+    data-index. The escape decision for the question and answer text lives in the
+    mod_playervideo/question_preview partial.
+
+    Example context (json):
+    {
+        "candidates": [
+            {
+                "index": 0,
+                "timedisplay": "0:45",
+                "questiontext": "<p>Which is a volcano?</p>",
+                "answers": [{"text": "Etna", "correct": true}, {"text": "Ganges", "correct": false}]
+            }
+        ]
+    }
+}}
+{{#candidates}}
+<div class="playervideo-batch-candidate mb-2 p-2 border rounded" data-index="{{index}}">
+    <div class="mono">{{timedisplay}}</div>
+    {{> mod_playervideo/question_preview}}
+    <button type="button" class="btn btn-sm btn-success" data-action="accept">
+        {{#str}}accept, mod_playervideo{{/str}}
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-action="discard">
+        {{#str}}discard, mod_playervideo{{/str}}
+    </button>
+</div>
+{{/candidates}}
+{{^candidates}}
+<div class="alert alert-warning">{{#str}}nocandidates, mod_playervideo{{/str}}</div>
+{{/candidates}}

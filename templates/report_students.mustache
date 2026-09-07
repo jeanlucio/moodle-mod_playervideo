@@ -1,0 +1,58 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_playervideo/report_students
+
+    The analytics dashboard's per-student table. Rendered client-side via core/templates from
+    amd/src/report.js with mod_playervideo_get_report's "bystudent" rows. No value here is
+    trusted HTML: every field is escaped by the template.
+
+    Example context (json):
+    {
+        "rows": [
+            {"fullname": "Ada Lovelace", "attemptscount": 2, "gradedisplay": "8.5",
+             "watcheddisplay": "90%", "completeddisplay": "Yes"}
+        ]
+    }
+}}
+{{#rows.0}}
+<table class="table table-sm">
+    <thead>
+        <tr>
+            <th scope="col">{{#str}}columnstudent, mod_playervideo{{/str}}</th>
+            <th scope="col">{{#str}}columnattempts, mod_playervideo{{/str}}</th>
+            <th scope="col">{{#str}}gradelabel, mod_playervideo{{/str}}</th>
+            <th scope="col">{{#str}}columnwatched, mod_playervideo{{/str}}</th>
+            <th scope="col">{{#str}}columncompleted, mod_playervideo{{/str}}</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{#rows}}
+        <tr>
+            <td>{{fullname}}</td>
+            <td>{{attemptscount}}</td>
+            <td>{{gradedisplay}}</td>
+            <td>{{watcheddisplay}}</td>
+            <td>{{completeddisplay}}</td>
+        </tr>
+        {{/rows}}
+    </tbody>
+</table>
+{{/rows.0}}
+{{^rows.0}}
+<p>{{#str}}nostudentreport, mod_playervideo{{/str}}</p>
+{{/rows.0}}

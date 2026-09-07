@@ -30,6 +30,7 @@ import Modal from 'core/modal';
 import ModalSaveCancel from 'core/modal_save_cancel';
 import ModalEvents from 'core/modal_events';
 import Notification from 'core/notification';
+import Templates from 'core/templates';
 import {getString} from 'core/str';
 import {createPlayer as createYoutubePlayer} from 'mod_playervideo/player_youtube';
 import {createPlayer as createVimeoPlayer} from 'mod_playervideo/player_vimeo';
@@ -390,38 +391,21 @@ const deleteActiveInteraction = async() => {
  * @param {Array} candidates Generated candidates from mod_playervideo_generate_questions_batch.
  */
 const renderBatchCandidates = async(root, modal, candidates) => {
-    const [acceptlabel, discardlabel, emptylabel] = await Promise.all([
-        getString('accept', 'mod_playervideo'),
-        getString('discard', 'mod_playervideo'),
-        getString('nocandidates', 'mod_playervideo'),
-    ]);
     const results = root.querySelector('#playervideo-batch-results');
 
+    const {html} = await Templates.renderForPromise('mod_playervideo/batch_candidates', {
+        candidates: candidates.map((candidate, index) => ({
+            index,
+            timedisplay: formatTime(candidate.timestamp),
+            questiontext: candidate.questiontext,
+            answers: candidate.answers,
+        })),
+    });
+    results.innerHTML = html;
+
     if (candidates.length === 0) {
-        results.innerHTML = `<div class="alert alert-warning">${escapeHtml(emptylabel)}</div>`;
         return;
     }
-
-    results.innerHTML = candidates.map((candidate, index) => {
-        // Question Bank content: answers[].text is already run through format_text() on the
-        // server (question_service) — render as HTML, matching the AI single-question preview.
-        const answerslist = candidate.answers.map(
-            (a) => `<li>${a.correct ? '<strong>' : ''}${a.text}${a.correct ? '</strong>' : ''}</li>`
-        ).join('');
-        return `
-            <div class="playervideo-batch-candidate mb-2 p-2 border rounded" data-index="${index}">
-                <div class="mono">${formatTime(candidate.timestamp)}</div>
-                <div>${candidate.questiontext}</div>
-                ${answerslist ? `<ul class="mb-1">${answerslist}</ul>` : ''}
-                <button type="button" class="btn btn-sm btn-success" data-action="accept">
-                    ${escapeHtml(acceptlabel)}
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="discard">
-                    ${escapeHtml(discardlabel)}
-                </button>
-            </div>
-        `;
-    }).join('');
 
     const closeIfEmpty = () => {
         if (results.children.length === 0) {
@@ -1167,15 +1151,28 @@ const renderQuestionEditor = async(existing) => {
         </div>
     `;
 
-    const updateSelectedQuestionDisplay = () => {
+    const updateSelectedQuestionDisplay = async() => {
         const el = document.getElementById('playervideo-selected-question');
         if (selectedQuestionId > 0) {
             el.hidden = false;
-            el.innerHTML = `<strong>${escapeHtml(hintlabel)}</strong> ${selectedQuestionPreview}`;
+            // The preview is question HTML from the server (format_text'd) or the
+            // mod_playervideo/question_preview template; question_hint's triple-brace preview
+            // is where that "trusted HTML" decision is declared.
+            const {html} = await Templates.renderForPromise('mod_playervideo/question_hint', {
+                label: hintlabel,
+                preview: selectedQuestionPreview,
+            });
+            el.innerHTML = html;
         } else {
             el.hidden = true;
             el.innerHTML = '';
         }
+    };
+
+    const selectQuestion = async(id, preview) => {
+        selectedQuestionId = id;
+        selectedQuestionPreview = preview;
+        await updateSelectedQuestionDisplay();
     };
 
     /**
@@ -1346,18 +1343,18 @@ const renderQuestionEditor = async(existing) => {
                         query,
                         limit: 20,
                     });
-                    data.questions.forEach((question) => {
+                    for (const question of data.questions) {
                         const item = document.createElement('li');
                         item.className = 'list-group-item list-group-item-action';
                         item.style.cursor = 'pointer';
-                        item.innerHTML = `<strong>${escapeHtml(question.type)}</strong> — ${question.preview}`;
-                        item.addEventListener('click', () => {
-                            selectedQuestionId = question.id;
-                            selectedQuestionPreview = question.preview;
-                            updateSelectedQuestionDisplay();
+                        const {html} = await Templates.renderForPromise('mod_playervideo/question_hint', {
+                            label: `${question.type} —`,
+                            preview: question.preview,
                         });
+                        item.innerHTML = html;
+                        item.addEventListener('click', () => selectQuestion(question.id, question.preview));
                         results.appendChild(item);
-                    });
+                    }
                 } catch (error) {
                     showError(error);
                 }
@@ -1425,12 +1422,12 @@ const renderQuestionEditor = async(existing) => {
                     answercount: parseInt(answercountinput.value, 10) || 4,
                 });
                 selectedQuestionId = result.questionid;
-                const answerslist = result.answers.map(
-                    (a) => `<li>${a.correct ? '<strong>' : ''}${a.text}${a.correct ? '</strong>' : ''}</li>`
-                ).join('');
-                selectedQuestionPreview = result.questiontext
-                    + (answerslist ? `<ul class="mb-0">${answerslist}</ul>` : '');
-                updateSelectedQuestionDisplay();
+                const preview = await Templates.renderForPromise('mod_playervideo/question_preview', {
+                    questiontext: result.questiontext,
+                    answers: result.answers,
+                });
+                selectedQuestionPreview = preview.html;
+                await updateSelectedQuestionDisplay();
             } catch (error) {
                 showError(error);
             } finally {
@@ -1466,7 +1463,7 @@ const renderQuestionEditor = async(existing) => {
     } else {
         await renderCreateSubpanel();
     }
-    updateSelectedQuestionDisplay();
+    await updateSelectedQuestionDisplay();
 
     renderFooter(async() => {
         const weight = parseFloat(document.getElementById('playervideo-weight').value) || 1;

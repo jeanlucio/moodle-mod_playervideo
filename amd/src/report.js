@@ -24,6 +24,7 @@
 
 import Ajax from 'core/ajax';
 import Notification from 'core/notification';
+import Templates from 'core/templates';
 import {getString} from 'core/str';
 import {escapeHtml} from 'mod_playervideo/escape';
 
@@ -50,59 +51,28 @@ const formatTime = (seconds) => {
 };
 
 /**
- * Renders the per-question table.
+ * Renders the per-question table via the mod_playervideo/report_questions template — the escape
+ * decision lives in the template ({{{questiontext}}} is the one trusted-HTML field, format_text
+ * '\''d server-side), not in a hand-built string.
  *
  * @param {Array} rows mod_playervideo_get_report's "byquestion" array.
  * @returns {Promise<void>}
  */
 const renderQuestionTable = async(rows) => {
-    const container = document.getElementById('playervideo-report-questions');
-
-    if (rows.length === 0) {
-        container.textContent = await getString('noquestionreport', 'mod_playervideo');
-        return;
-    }
-
-    const [coltime, colquestion, coltype, colresponses, colcorrect, colpending, colgraded] = await Promise.all([
-        getString('columntime', 'mod_playervideo'),
-        getString('columnquestion', 'mod_playervideo'),
-        getString('interactiontype', 'mod_playervideo'),
-        getString('columnresponses', 'mod_playervideo'),
-        getString('columncorrect', 'mod_playervideo'),
-        getString('columnpending', 'mod_playervideo'),
-        getString('columngraded', 'mod_playervideo'),
-    ]);
-
     const ismultichoicetype = (qtype) => qtype === 'multichoice' || qtype === 'truefalse';
-
-    const bodyrows = rows.map((row) => `
-        <tr>
-            <td class="mono">${formatTime(row.timestamp)}</td>
-            <td>${row.questiontext}</td>
-            <td>${escapeHtml(row.qtype)}</td>
-            <td>${row.totalresponses}</td>
-            <td>${ismultichoicetype(row.qtype) ? `${row.percentcorrect}%` : '—'}</td>
-            <td>${row.pendingcount}</td>
-            <td>${row.gradedcount}</td>
-        </tr>
-    `).join('');
-
-    container.innerHTML = `
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th scope="col">${escapeHtml(coltime)}</th>
-                    <th scope="col">${escapeHtml(colquestion)}</th>
-                    <th scope="col">${escapeHtml(coltype)}</th>
-                    <th scope="col">${escapeHtml(colresponses)}</th>
-                    <th scope="col">${escapeHtml(colcorrect)}</th>
-                    <th scope="col">${escapeHtml(colpending)}</th>
-                    <th scope="col">${escapeHtml(colgraded)}</th>
-                </tr>
-            </thead>
-            <tbody>${bodyrows}</tbody>
-        </table>
-    `;
+    const context = {
+        rows: rows.map((row) => ({
+            timedisplay: formatTime(row.timestamp),
+            questiontext: row.questiontext,
+            qtype: row.qtype,
+            totalresponses: row.totalresponses,
+            correctdisplay: ismultichoicetype(row.qtype) ? `${row.percentcorrect}%` : '\u2014',
+            pendingcount: row.pendingcount,
+            gradedcount: row.gradedcount,
+        })),
+    };
+    const {html} = await Templates.renderForPromise('mod_playervideo/report_questions', context);
+    document.getElementById('playervideo-report-questions').innerHTML = html;
 };
 
 /**
@@ -112,47 +82,21 @@ const renderQuestionTable = async(rows) => {
  * @returns {Promise<void>}
  */
 const renderStudentTable = async(rows) => {
-    const container = document.getElementById('playervideo-report-students');
-
-    if (rows.length === 0) {
-        container.textContent = await getString('nostudentreport', 'mod_playervideo');
-        return;
-    }
-
-    const [colstudent, colattempts, gradelabel, colwatched, colcompleted, yesstr, nostr] = await Promise.all([
-        getString('columnstudent', 'mod_playervideo'),
-        getString('columnattempts', 'mod_playervideo'),
-        getString('gradelabel', 'mod_playervideo'),
-        getString('columnwatched', 'mod_playervideo'),
-        getString('columncompleted', 'mod_playervideo'),
+    const [yesstr, nostr] = await Promise.all([
         getString('yes', 'moodle'),
         getString('no', 'moodle'),
     ]);
-
-    const bodyrows = rows.map((row) => `
-        <tr>
-            <td>${escapeHtml(row.fullname)}</td>
-            <td>${row.attemptscount}</td>
-            <td>${row.finalgrade !== null ? Math.round(row.finalgrade * 100) / 100 : '—'}</td>
-            <td>${Math.round(row.watchedpct)}%</td>
-            <td>${row.completed ? escapeHtml(yesstr) : escapeHtml(nostr)}</td>
-        </tr>
-    `).join('');
-
-    container.innerHTML = `
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th scope="col">${escapeHtml(colstudent)}</th>
-                    <th scope="col">${escapeHtml(colattempts)}</th>
-                    <th scope="col">${escapeHtml(gradelabel)}</th>
-                    <th scope="col">${escapeHtml(colwatched)}</th>
-                    <th scope="col">${escapeHtml(colcompleted)}</th>
-                </tr>
-            </thead>
-            <tbody>${bodyrows}</tbody>
-        </table>
-    `;
+    const context = {
+        rows: rows.map((row) => ({
+            fullname: row.fullname,
+            attemptscount: row.attemptscount,
+            gradedisplay: row.finalgrade !== null ? Math.round(row.finalgrade * 100) / 100 : '\u2014',
+            watcheddisplay: `${Math.round(row.watchedpct)}%`,
+            completeddisplay: row.completed ? yesstr : nostr,
+        })),
+    };
+    const {html} = await Templates.renderForPromise('mod_playervideo/report_students', context);
+    document.getElementById('playervideo-report-students').innerHTML = html;
 };
 
 /**

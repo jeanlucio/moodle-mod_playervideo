@@ -1,0 +1,64 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_playervideo/report_questions
+
+    The analytics dashboard's per-question table. Rendered client-side via core/templates from
+    amd/src/report.js with mod_playervideo_get_report's "byquestion" rows. Only questiontext is
+    trusted HTML: it is run through format_text() with the module context on the server
+    (question_service), so it alone is rendered unescaped; every other field is escaped by the
+    template.
+
+    Example context (json):
+    {
+        "rows": [
+            {"timedisplay": "0:30", "questiontext": "<p>Which is a volcano?</p>", "qtype": "multichoice",
+             "totalresponses": 12, "correctdisplay": "75%", "pendingcount": 0, "gradedcount": 12}
+        ]
+    }
+}}
+{{#rows.0}}
+<table class="table table-sm">
+    <thead>
+        <tr>
+            <th scope="col">{{#str}}columntime, mod_playervideo{{/str}}</th>
+            <th scope="col">{{#str}}columnquestion, mod_playervideo{{/str}}</th>
+            <th scope="col">{{#str}}interactiontype, mod_playervideo{{/str}}</th>
+            <th scope="col">{{#str}}columnresponses, mod_playervideo{{/str}}</th>
+            <th scope="col">{{#str}}columncorrect, mod_playervideo{{/str}}</th>
+            <th scope="col">{{#str}}columnpending, mod_playervideo{{/str}}</th>
+            <th scope="col">{{#str}}columngraded, mod_playervideo{{/str}}</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{#rows}}
+        <tr>
+            <td class="mono">{{timedisplay}}</td>
+            <td>{{{questiontext}}}</td>
+            <td>{{qtype}}</td>
+            <td>{{totalresponses}}</td>
+            <td>{{correctdisplay}}</td>
+            <td>{{pendingcount}}</td>
+            <td>{{gradedcount}}</td>
+        </tr>
+        {{/rows}}
+    </tbody>
+</table>
+{{/rows.0}}
+{{^rows.0}}
+<p>{{#str}}noquestionreport, mod_playervideo{{/str}}</p>
+{{/rows.0}}

@@ -25,6 +25,7 @@
 
 import Ajax from 'core/ajax';
 import Notification from 'core/notification';
+import Templates from 'core/templates';
 import {getString} from 'core/str';
 import {escapeHtml} from 'mod_playervideo/escape';
 
@@ -92,43 +93,21 @@ const renderAiBlock = (card, feedback, label) => {
  * @returns {Promise<HTMLElement>}
  */
 const renderCard = async(response) => {
-    const [aisuggestionlabel, studentanswerlabel, generatestr, gradelabel, feedbacklabel, confirmstr] = await Promise.all([
-        getString('aisuggestionlabel', 'mod_playervideo'),
-        getString('studentanswerlabel', 'mod_playervideo'),
-        getString('generate', 'mod_playervideo'),
-        getString('gradelabel', 'mod_playervideo'),
-        getString('feedbacklabel', 'mod_playervideo'),
-        getString('confirmgrade', 'mod_playervideo'),
-    ]);
+    const aisuggestionlabel = await getString('aisuggestionlabel', 'mod_playervideo');
 
-    const card = document.createElement('div');
-    card.className = 'card mb-3 p-3';
-    card.dataset.responseid = response.responseid;
-    card.innerHTML = `
-        <div class="d-flex justify-content-between">
-            <strong>${escapeHtml(response.fullname)}</strong>
-            <span class="mono">${formatTime(response.timestamp)}</span>
-        </div>
-        <div class="mt-1">${response.questiontext}</div>
-        <label class="playervideo-field-label mt-2">${escapeHtml(studentanswerlabel)}</label>
-        <div class="playervideo-student-answer">${escapeHtml(response.responsetext)}</div>
-        <div class="playervideo-ai-block mt-2"></div>
-        <button type="button" class="btn btn-outline-secondary btn-sm mt-2" data-action="generate">
-            ${escapeHtml(generatestr)}
-        </button>
-        <label class="playervideo-field-label mt-2" for="playervideo-grade-${response.responseid}">
-            ${escapeHtml(gradelabel)} (0&ndash;${response.maxgrade})
-        </label>
-        <input type="number" min="0" max="${response.maxgrade}" step="0.01" class="form-control mb-2"
-            id="playervideo-grade-${response.responseid}"
-            value="${response.aigrade !== null ? response.aigrade : ''}">
-        <label class="playervideo-field-label" for="playervideo-feedback-${response.responseid}">
-            ${escapeHtml(feedbacklabel)}
-        </label>
-        <textarea class="form-control mb-2"
-            id="playervideo-feedback-${response.responseid}">${escapeHtml(response.aifeedback)}</textarea>
-        <button type="button" class="btn btn-primary btn-sm" data-action="confirm">${escapeHtml(confirmstr)}</button>
-    `;
+    const {html} = await Templates.renderForPromise('mod_playervideo/grading_card', {
+        responseid: response.responseid,
+        fullname: response.fullname,
+        timedisplay: formatTime(response.timestamp),
+        questiontext: response.questiontext,
+        responsetext: response.responsetext,
+        maxgrade: response.maxgrade,
+        gradevalue: response.aigrade !== null ? response.aigrade : '',
+        aifeedback: response.aifeedback,
+    });
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    const card = wrapper.firstElementChild;
 
     renderAiBlock(card, response.aifeedback, aisuggestionlabel);
 
