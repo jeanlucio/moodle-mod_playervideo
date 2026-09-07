@@ -342,6 +342,7 @@ class provider implements
                 'lastposition' => $progress->lastposition,
                 'watchedpct' => $progress->watchedpct,
                 'watchedtoend' => transform::yesno($progress->watchedtoend),
+                'segments' => $progress->segments,
                 'timemodified' => transform::datetime($progress->timemodified),
             ]
         );
@@ -363,6 +364,7 @@ class provider implements
                 'attemptnumber' => (int) $attempt->attemptnumber,
                 'status' => $attempt->status,
                 'grade' => $attempt->grade !== null ? (float) $attempt->grade : null,
+                'hudretrycharged' => transform::yesno($attempt->hudretrycharged),
                 'timestart' => transform::datetime($attempt->timestart),
                 'timefinish' => $attempt->timefinish ? transform::datetime($attempt->timefinish) : null,
             ];
@@ -388,8 +390,15 @@ class provider implements
         $rows = array_values(array_map(static function (\stdClass $response): array {
             return [
                 'interactionid' => (int) $response->interactionid,
+                'questionid' => $response->questionid !== null ? (int) $response->questionid : null,
+                'answerid' => $response->answerid !== null ? (int) $response->answerid : null,
+                'polloptionid' => $response->polloptionid !== null ? (int) $response->polloptionid : null,
                 'responsetext' => $response->responsetext,
                 'iscorrect' => $response->iscorrect !== null ? transform::yesno($response->iscorrect) : null,
+                'hudrewarded' => transform::yesno($response->hudrewarded),
+                'aigrade' => $response->aigrade !== null ? (float) $response->aigrade : null,
+                'aifeedback' => $response->aifeedback,
+                'teachergrade' => $response->teachergrade !== null ? (float) $response->teachergrade : null,
                 'teacherfeedback' => $response->teacherfeedback,
                 'status' => $response->status,
                 'timecreated' => transform::datetime($response->timecreated),

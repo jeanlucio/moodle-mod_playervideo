@@ -321,13 +321,27 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
      * @return void
      */
     public function test_export_user_data(): void {
+        global $DB;
+
         $course = $this->getDataGenerator()->create_course();
         $cm = $this->make_cm($course);
         $user = $this->getDataGenerator()->create_user();
         $interactionid = $this->make_interaction((int) $cm->id);
         $this->make_progress($user->id, (int) $cm->id);
         $attemptid = $this->make_attempt($user->id, (int) $cm->id, 90.0);
-        $this->make_response($user->id, (int) $cm->id, $attemptid, $interactionid);
+        $responseid = $this->make_response($user->id, (int) $cm->id, $attemptid, $interactionid);
+        // Populate the columns get_metadata() declares but a fresh response leaves null/0, so
+        // the assertions below can catch a column silently dropped from the export again.
+        $DB->update_record('playervideo_responses', (object) [
+            'id' => $responseid,
+            'questionid' => 501,
+            'answerid' => 502,
+            'polloptionid' => null,
+            'hudrewarded' => 1,
+            'aigrade' => 0.75,
+            'aifeedback' => 'AI: good start.',
+            'teachergrade' => 0.9,
+        ]);
 
         $context = \context_module::instance($cm->cmid);
         $contextlist = new approved_contextlist($user, 'mod_playervideo', [$context->id]);
@@ -338,6 +352,7 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
             get_string('privacy:progress', 'mod_playervideo'),
         ]);
         $this->assertEquals(42.5, (float) $progressdata->lastposition);
+        $this->assertSame('[[0,42.5]]', $progressdata->segments);
 
         $attemptsdata = writer::with_context($context)->get_data([
             get_string('pluginname', 'mod_playervideo'),
@@ -345,14 +360,23 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         ]);
         $this->assertNotEmpty($attemptsdata->attempts);
         $this->assertSame(90.0, (float) $attemptsdata->attempts[0]['grade']);
+        $this->assertSame('No', $attemptsdata->attempts[0]['hudretrycharged']);
 
         $responsesdata = writer::with_context($context)->get_data([
             get_string('pluginname', 'mod_playervideo'),
             get_string('privacy:responses', 'mod_playervideo'),
         ]);
         $this->assertNotEmpty($responsesdata->responses);
-        $this->assertSame('Minha resposta', $responsesdata->responses[0]['responsetext']);
-        $this->assertSame($interactionid, (int) $responsesdata->responses[0]['interactionid']);
+        $response = $responsesdata->responses[0];
+        $this->assertSame('Minha resposta', $response['responsetext']);
+        $this->assertSame($interactionid, (int) $response['interactionid']);
+        $this->assertSame(501, (int) $response['questionid']);
+        $this->assertSame(502, (int) $response['answerid']);
+        $this->assertNull($response['polloptionid']);
+        $this->assertSame('Yes', $response['hudrewarded']);
+        $this->assertEquals(0.75, (float) $response['aigrade']);
+        $this->assertSame('AI: good start.', $response['aifeedback']);
+        $this->assertEquals(0.9, (float) $response['teachergrade']);
     }
 
     /**
