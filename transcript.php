@@ -43,7 +43,6 @@ $PAGE->set_url('/mod/playervideo/transcript.php', ['id' => $cm->id]);
 $PAGE->set_title($instance->name);
 $PAGE->set_heading($course->fullname);
 $PAGE->set_pagelayout('incourse');
-$PAGE->requires->css('/mod/playervideo/styles.css');
 
 $blocks = transcript_service::build_document($instance, $context);
 

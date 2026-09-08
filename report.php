@@ -44,7 +44,6 @@ $PAGE->set_url('/mod/playervideo/report.php', ['id' => $cm->id]);
 $PAGE->set_title(get_string('reportheader', 'mod_playervideo') . ': ' . $instance->name);
 $PAGE->set_heading($course->fullname);
 $PAGE->set_pagelayout('incourse');
-$PAGE->requires->css('/mod/playervideo/styles.css');
 
 if ($canreview) {
     $PAGE->requires->js_call_amd('mod_playervideo/grading', 'init', [(int) $instance->id]);

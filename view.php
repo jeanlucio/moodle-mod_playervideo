@@ -46,7 +46,6 @@ $PAGE->set_url('/mod/playervideo/view.php', ['id' => $cm->id]);
 $PAGE->set_title($instance->name);
 $PAGE->set_heading($course->fullname);
 $PAGE->set_pagelayout('incourse');
-$PAGE->requires->css('/mod/playervideo/styles.css');
 
 $canattempt = has_capability('mod/playervideo:attempt', $context);
 $userid = (int) $USER->id;
