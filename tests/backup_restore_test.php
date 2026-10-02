@@ -548,9 +548,13 @@ final class backup_restore_test extends \advanced_testcase {
      *
      * @param \stdClass $course Course the module belongs to.
      * @param \stdClass $cm Course module record to duplicate.
-     * @return \stdClass|\core_course\cm_info The new course module record.
+     * Both cm_info class names are listed: Moodle 4.5's duplicate_module() returns the global
+     * \cm_info, while 5.x returns \core_course\cm_info. A return type check never autoloads,
+     * so a class alias alone would not make one name match the other.
+     *
+     * @return \stdClass|\cm_info|\core_course\cm_info The new course module record.
      */
-    private function duplicate_activity(\stdClass $course, \stdClass $cm): \stdClass|\core_course\cm_info {
+    private function duplicate_activity(\stdClass $course, \stdClass $cm): \stdClass|\cm_info|\core_course\cm_info {
         if (method_exists(cmactions::class, 'duplicate')) {
             return (new cmactions($course))->duplicate($cm->id);
         }
