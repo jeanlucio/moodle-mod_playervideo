@@ -193,7 +193,7 @@ function playervideo_update_grades(stdClass $instance, int $userid = 0): void {
     }
 
     $grademethod = (int) ($instance->grademethod ?? attempt_manager::GRADE_HIGHEST);
-    $finalgradesbyuser = attempt_manager::aggregate_final_grades_bulk(
+    $finalgradesbyuser = attempt_manager::aggregate_final_grades_with_dates_bulk(
         $instance->id,
         array_map('intval', $userids),
         $grademethod
@@ -201,12 +201,10 @@ function playervideo_update_grades(stdClass $instance, int $userid = 0): void {
 
     $grades = [];
     foreach ($finalgradesbyuser as $uid => $finalgrade) {
-        if ($finalgrade === null) {
-            continue;
-        }
         $grade = new stdClass();
         $grade->userid = $uid;
-        $grade->rawgrade = $finalgrade;
+        $grade->rawgrade = $finalgrade->grade;
+        $grade->datesubmitted = $finalgrade->datesubmitted;
         $grades[$uid] = $grade;
     }
 
@@ -286,7 +284,7 @@ function playervideo_update_instance(stdClass $data, mixed $mform = null): bool 
     // video (type or URL, or re-uploads a file) it no longer applies, and there is no
     // duration field on the form to correct it by hand — clear it so the next heartbeat
     // resolves it afresh for the new video.
-    $previous = $DB->get_record('playervideo', ['id' => $data->id], 'videotype, videourl');
+    $previous = $DB->get_record('playervideo', ['id' => $data->id], 'videotype, videourl, grademethod');
     $sourcechanged = $previous
         && ($previous->videotype !== $data->videotype
             || (string) $previous->videourl !== (string) $data->videourl
@@ -313,7 +311,16 @@ function playervideo_update_instance(stdClass $data, mixed $mform = null): bool 
         ]);
     }
 
-    playervideo_grade_item_update($data);
+    // Grades already in the gradebook were aggregated with the old method. Recompute them
+    // now, as quiz_update_instance() does, instead of leaving them stale until each student
+    // makes another attempt.
+    $grademethodchanged = $previous && isset($data->grademethod)
+        && (int) $data->grademethod !== (int) $previous->grademethod;
+    if ($grademethodchanged) {
+        playervideo_update_grades($data);
+    } else {
+        playervideo_grade_item_update($data);
+    }
 
     return $result;
 }

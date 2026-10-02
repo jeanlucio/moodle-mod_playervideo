@@ -319,11 +319,62 @@ class attempt_manager {
      * @return array Student id (int) => aggregated grade (float), or null if no finished attempt.
      */
     public static function aggregate_final_grades_bulk(int $playervideoid, array $userids, int $grademethod): array {
+        $result = array_fill_keys($userids, null);
+
+        foreach (self::finished_attempts_bulk($playervideoid, $userids) as $userid => $attempts) {
+            $result[$userid] = self::apply_grademethod(array_column($attempts, 'grade'), $grademethod);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Like {@see aggregate_final_grades_bulk()}, plus when each student submitted the work
+     * behind that grade, for the gradebook's datesubmitted.
+     *
+     * The submission time is the finish time of the attempt that produces the grade: the
+     * best one for the highest grade (the earliest of any tie, so a later attempt with the
+     * same grade never moves it), the first or last one for those methods, and the latest
+     * one for the average, which depends on every attempt (the rule mod_quiz applies).
+     * A teacher correcting an open question later never moves it either:
+     * {@see recalculate_after_review()} keeps the attempt's own timefinish.
+     *
+     * @param int $playervideoid The activity instance id.
+     * @param int[] $userids Student ids to aggregate for.
+     * @param int $grademethod One of the GRADE_* constants.
+     * @return array Student id (int) => object with grade (float) and datesubmitted (int),
+     *  only for students with at least one finished attempt.
+     */
+    public static function aggregate_final_grades_with_dates_bulk(
+        int $playervideoid,
+        array $userids,
+        int $grademethod
+    ): array {
+        $result = [];
+
+        foreach (self::finished_attempts_bulk($playervideoid, $userids) as $userid => $attempts) {
+            $result[$userid] = (object) [
+                'grade' => self::apply_grademethod(array_column($attempts, 'grade'), $grademethod),
+                'datesubmitted' => self::submission_time($attempts, $grademethod),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Loads every finished attempt of the given students in one query.
+     *
+     * @param int $playervideoid The activity instance id.
+     * @param int[] $userids Student ids.
+     * @return array Student id (int) => list of attempts (each with float grade and int
+     *  timefinish), in attempt order (oldest first).
+     */
+    private static function finished_attempts_bulk(int $playervideoid, array $userids): array {
         global $DB;
 
-        $result = array_fill_keys($userids, null);
         if (empty($userids)) {
-            return $result;
+            return [];
         }
 
         [$insql, $inparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
@@ -332,19 +383,45 @@ class attempt_manager {
             "playervideoid = :playervideoid AND status = :finished AND userid $insql",
             array_merge(['playervideoid' => $playervideoid, 'finished' => 'finished'], $inparams),
             'userid ASC, attemptnumber ASC',
-            'id, userid, attemptnumber, grade'
+            'id, userid, attemptnumber, grade, timefinish'
         );
 
-        $gradesbyuser = [];
+        $attemptsbyuser = [];
         foreach ($records as $record) {
-            $gradesbyuser[(int) $record->userid][] = (float) $record->grade;
+            $attemptsbyuser[(int) $record->userid][] = [
+                'grade' => (float) $record->grade,
+                'timefinish' => (int) $record->timefinish,
+            ];
         }
 
-        foreach ($gradesbyuser as $userid => $grades) {
-            $result[$userid] = self::apply_grademethod($grades, $grademethod);
-        }
+        return $attemptsbyuser;
+    }
 
-        return $result;
+    /**
+     * Returns the finish time of the attempt that produces the grade under a method.
+     *
+     * @param array $attempts Attempts with grade and timefinish, in attempt order; never empty.
+     * @param int $grademethod One of the GRADE_* constants.
+     * @return int
+     */
+    private static function submission_time(array $attempts, int $grademethod): int {
+        switch ($grademethod) {
+            case self::GRADE_FIRST:
+                return $attempts[0]['timefinish'];
+            case self::GRADE_LAST:
+                return $attempts[count($attempts) - 1]['timefinish'];
+            case self::GRADE_AVERAGE:
+                return max(array_column($attempts, 'timefinish'));
+            case self::GRADE_HIGHEST:
+            default:
+                $best = $attempts[0];
+                foreach ($attempts as $attempt) {
+                    if ($attempt['grade'] > $best['grade']) {
+                        $best = $attempt;
+                    }
+                }
+                return $best['timefinish'];
+        }
     }
 
     /**

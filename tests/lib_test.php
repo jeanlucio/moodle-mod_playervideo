@@ -547,4 +547,93 @@ final class lib_test extends \advanced_testcase {
 
         $this->assertSame('', $cminfo->content);
     }
+
+    /**
+     * Inserts finished attempts for a student: score and the hour (after $base) each one
+     * finished, numbered in order. The two 90s tie for the highest grade on purpose.
+     *
+     * @param \stdClass $instance Activity instance.
+     * @param int $userid Student id.
+     * @param int $base Base timestamp.
+     * @return void
+     */
+    private function create_finished_attempts(\stdClass $instance, int $userid, int $base): void {
+        global $DB;
+
+        foreach ([1 => 70.0, 2 => 90.0, 3 => 90.0, 4 => 50.0] as $number => $grade) {
+            $finished = $base + $number * HOURSECS;
+            $DB->insert_record('playervideo_attempts', (object) [
+                'playervideoid' => $instance->id, 'userid' => $userid, 'attemptnumber' => $number,
+                'status' => 'finished', 'grade' => $grade, 'hudretrycharged' => 0,
+                'timestart' => $finished - 600, 'timefinish' => $finished,
+                'timecreated' => $finished - 600, 'timemodified' => $finished,
+            ]);
+        }
+    }
+
+    /**
+     * Data provider for test_update_grades_reports_datesubmitted().
+     *
+     * @return array
+     */
+    public static function datesubmitted_provider(): array {
+        return [
+            'highest picks the earliest of the tied best attempts' => [attempt_manager::GRADE_HIGHEST, 2],
+            'first picks the first attempt' => [attempt_manager::GRADE_FIRST, 1],
+            'last picks the last attempt' => [attempt_manager::GRADE_LAST, 4],
+            'average depends on every attempt, so the last one' => [attempt_manager::GRADE_AVERAGE, 4],
+        ];
+    }
+
+    /**
+     * The grade sent to the gradebook carries when the student finished the attempt that
+     * produced it, not when the grade changed: a teacher correcting an open question after
+     * the due date must not make an on-time attempt look late to gradebook consumers such
+     * as late-penalty plugins.
+     *
+     * @dataProvider datesubmitted_provider
+     * @param int $grademethod attempt_manager::GRADE_* constant.
+     * @param int $expectedattempt Number of the attempt expected as the submission.
+     * @return void
+     */
+    public function test_update_grades_reports_datesubmitted(int $grademethod, int $expectedattempt): void {
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->create_instance($course->id, ['grademethod' => $grademethod]);
+        $userid = 2;
+        $base = 1700000000;
+        $this->create_finished_attempts($instance, $userid, $base);
+
+        playervideo_update_grades($instance, $userid);
+
+        $grades = grade_get_grades($course->id, 'mod', 'playervideo', $instance->id, $userid);
+        $this->assertEquals($base + $expectedattempt * HOURSECS, $grades->items[0]->grades[$userid]->datesubmitted);
+    }
+
+    /**
+     * Changing the grading method recomputes the grades already in the gradebook, as
+     * quiz_update_instance() does, instead of leaving them on the old method until each
+     * student makes another attempt.
+     *
+     * @return void
+     */
+    public function test_update_instance_recomputes_grades_when_grademethod_changes(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->create_instance($course->id, ['grademethod' => attempt_manager::GRADE_HIGHEST]);
+        $userid = 2;
+        $base = 1700000000;
+        $this->create_finished_attempts($instance, $userid, $base);
+        playervideo_update_grades($instance, $userid);
+
+        $update = $DB->get_record('playervideo', ['id' => $instance->id], '*', MUST_EXIST);
+        $update->instance = $instance->id;
+        $update->coursemodule = $instance->cmid;
+        $update->grademethod = attempt_manager::GRADE_FIRST;
+        playervideo_update_instance($update);
+
+        $grades = grade_get_grades($course->id, 'mod', 'playervideo', $instance->id, $userid);
+        $this->assertSame(70.0, (float) $grades->items[0]->grades[$userid]->grade);
+        $this->assertEquals($base + HOURSECS, $grades->items[0]->grades[$userid]->datesubmitted);
+    }
 }
