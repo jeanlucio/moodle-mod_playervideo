@@ -286,6 +286,39 @@ final class hud_service_test extends \advanced_testcase {
     }
 
     /**
+     * Tests that get_item_name_plain returns the name as typed, where get_item_name returns it
+     * escaped for HTML.
+     *
+     * @return void
+     */
+    public function test_get_item_name_plain_returns_unescaped_name(): void {
+        $this->skip_if_no_playerhud();
+        $course = $this->getDataGenerator()->create_course();
+        $biid = $this->make_block_instance($course);
+        $itemid = $this->make_item($biid, 'Cafe & "Co"');
+
+        $this->assertSame('Cafe & "Co"', hud_service::get_item_name_plain($biid, $itemid));
+        $this->assertSame('Cafe &amp; "Co"', hud_service::get_item_name($biid, $itemid));
+    }
+
+    /**
+     * Tests that get_item_name_plain returns an empty string for an item belonging to a different
+     * block instance.
+     *
+     * @return void
+     */
+    public function test_get_item_name_plain_empty_for_other_instance_item(): void {
+        $this->skip_if_no_playerhud();
+        $course = $this->getDataGenerator()->create_course();
+        $othercourse = $this->getDataGenerator()->create_course();
+        $biid = $this->make_block_instance($course);
+        $otherbiid = $this->make_block_instance($othercourse);
+        $itemid = $this->make_item($otherbiid, 'Gold Key');
+
+        $this->assertSame('', hud_service::get_item_name_plain($biid, $itemid));
+    }
+
+    /**
      * Tests that consume_items returns true (waived, not blocked) for an item belonging to a
      * different block instance — a foreign or deleted item can never be restocked, so the cost
      * is dispensed rather than locking the student out forever.

@@ -344,7 +344,7 @@ const updateStreak = async(iscorrect) => {
  * Pops the PlayerHUD reward toast for a couple of seconds — only ever called when the server's
  * own submit_answer response reports hudrewarded, never speculatively from the client.
  *
- * @param {string} itemname Display name of the granted item (hud_service::get_item_name()).
+ * @param {string} itemname Display name of the granted item (hud_service::get_item_name_plain()).
  * @returns {Promise<void>}
  */
 const showReward = async(itemname) => {

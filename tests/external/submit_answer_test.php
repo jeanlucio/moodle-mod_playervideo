@@ -280,6 +280,41 @@ final class submit_answer_test extends \advanced_testcase {
     }
 
     /**
+     * The reward name travels to the overlay script, which writes it with textContent, so it must
+     * reach it as typed and not escaped for HTML.
+     *
+     * @return void
+     */
+    public function test_hud_reward_name_is_plain_text(): void {
+        global $DB;
+
+        if (!$DB->get_manager()->table_exists('block_playerhud_items')) {
+            $this->markTestSkipped('block_playerhud not installed.');
+        }
+        $blockid = $DB->insert_record('block_instances', (object) [
+            'blockname' => 'playerhud', 'parentcontextid' => \context_course::instance($this->course->id)->id,
+            'showinsubcontexts' => 0, 'pagetypepattern' => 'course-view-*', 'defaultregion' => 'side-pre',
+            'defaultweight' => 0, 'configdata' => base64_encode(serialize(new \stdClass())),
+            'timecreated' => time(), 'timemodified' => time(),
+        ]);
+        $itemid = $DB->insert_record('block_playerhud_items', (object) [
+            'blockinstanceid' => $blockid, 'name' => 'Cafe & "Co"', 'xp' => 0, 'image' => '', 'description' => '',
+            'enabled' => 1, 'secret' => 0, 'timecreated' => time(), 'timemodified' => time(),
+        ]);
+        $DB->set_field('playervideo', 'hudcorrectitem', $itemid, ['id' => $this->instance->id]);
+        $fixture = $this->make_truefalse_interaction();
+
+        $result = $this->call([
+            'interactionid' => $fixture['interactionid'],
+            'answerid' => $fixture['correctanswerid'],
+        ]);
+
+        $this->assertFalse($result['error']);
+        $this->assertTrue($result['data']['hudrewarded']);
+        $this->assertSame('Cafe & "Co"', $result['data']['hudrewardname']);
+    }
+
+    /**
      * Tests that a correct answer on an instance with a configured hudcorrectitem is reported
      * back as rewarded, with the item's real display name — the overlay's reward toast (Fase
      * 11) needs both to show "+1 <name>" instead of a placeholder.

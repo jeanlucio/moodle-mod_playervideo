@@ -199,7 +199,7 @@ class submit_answer extends external_api {
             if ($shouldreward) {
                 $blockinstanceid = hud_service::resolve_block_instance_id($instance);
                 hud_service::grant_items($blockinstanceid, $attempt->userid, (int) $instance->hudcorrectitem, 1);
-                $hudrewardname = hud_service::get_item_name($blockinstanceid, (int) $instance->hudcorrectitem);
+                $hudrewardname = hud_service::get_item_name_plain($blockinstanceid, (int) $instance->hudcorrectitem);
             }
         } finally {
             $lock->release();
