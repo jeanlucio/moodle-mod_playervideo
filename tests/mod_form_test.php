@@ -500,4 +500,35 @@ final class mod_form_test extends \advanced_testcase {
 
         $this->assertFalse($form->completion_rule_enabled(['completionallinteractions' => 0, 'completionwatchtoend' => 0]));
     }
+
+    /**
+     * The limits of the maxlength rules registered on a form field.
+     *
+     * @param \MoodleQuickForm $mform The form.
+     * @param string $field Field name.
+     * @return int[] The rule limits, empty when the field has none.
+     */
+    private function maxlength_rules(\MoodleQuickForm $mform, string $field): array {
+        $rules = (new \ReflectionProperty(\HTML_QuickForm::class, '_rules'))->getValue($mform);
+        $limits = [];
+        foreach ($rules[$field] ?? [] as $rule) {
+            if ($rule['type'] === 'maxlength') {
+                $limits[] = (int) $rule['format'];
+            }
+        }
+        return $limits;
+    }
+
+    /**
+     * The video URL has a maxlength rule that fits its 255-character column, so a longer link is
+     * refused by the form instead of failing as a database error.
+     *
+     * @return void
+     */
+    public function test_the_video_url_field_has_a_maxlength_rule_that_fits_the_column(): void {
+        $limits = $this->maxlength_rules($this->get_quickform($this->build_form()), 'videourl');
+
+        $this->assertNotEmpty($limits, 'The video URL field has no maxlength rule.');
+        $this->assertLessThanOrEqual(255, min($limits));
+    }
 }

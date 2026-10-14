@@ -69,6 +69,7 @@ class mod_playervideo_mod_form extends moodleform_mod {
 
         $mform->addElement('text', 'videourl', get_string('videourl', 'mod_playervideo'), ['size' => '64']);
         $mform->setType('videourl', PARAM_URL);
+        $mform->addRule('videourl', get_string('maximumchars', '', 255), 'maxlength', 255, 'client');
         $mform->hideIf('videourl', 'videotype', 'eq', 'html5');
 
         $mform->addElement('filepicker', 'videofile', get_string('videofile', 'mod_playervideo'), null, [
