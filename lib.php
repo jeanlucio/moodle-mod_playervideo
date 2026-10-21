@@ -599,3 +599,65 @@ function playervideo_extend_settings_navigation(
         );
     }
 }
+
+/**
+ * Adds the playervideo section to the course reset form.
+ *
+ * @param MoodleQuickForm $mform The course reset form.
+ * @return void
+ */
+function playervideo_reset_course_form_definition(MoodleQuickForm $mform): void {
+    $mform->addElement('header', 'playervideoheader', get_string('modulenameplural', 'mod_playervideo'));
+    $mform->addElement('advcheckbox', 'reset_playervideo_userdata', get_string('resetplayervideouserdata', 'mod_playervideo'));
+}
+
+/**
+ * Returns the default values for the playervideo course reset form.
+ *
+ * @param stdClass $course The course being reset.
+ * @return array
+ */
+function playervideo_reset_course_form_defaults(stdClass $course): array {
+    return ['reset_playervideo_userdata' => 1];
+}
+
+/**
+ * Removes the students' progress, attempts and answers from the course's activities when it is reset.
+ *
+ * Core clears the completion and the grades by itself but only asks the activities that define this
+ * function to clear their own data. Left behind, the rows would satisfy the completion rule again and
+ * bring the old grade back for a student enrolled again. What the teacher wrote stays.
+ *
+ * @param stdClass $data Reset form data, must contain courseid.
+ * @return array Status rows for the course reset report.
+ */
+function playervideo_reset_userdata(stdClass $data): array {
+    global $DB;
+
+    $status = [];
+    if (empty($data->reset_playervideo_userdata)) {
+        return $status;
+    }
+
+    $instances = $DB->get_records('playervideo', ['course' => $data->courseid]);
+    if (empty($instances)) {
+        return $status;
+    }
+
+    [$insql, $inparams] = $DB->get_in_or_equal(array_keys($instances), SQL_PARAMS_NAMED, 'pvid');
+    $DB->delete_records_select('playervideo_responses', "playervideoid $insql", $inparams);
+    $DB->delete_records_select('playervideo_attempts', "playervideoid $insql", $inparams);
+    $DB->delete_records_select('playervideo_progress', "playervideoid $insql", $inparams);
+
+    foreach ($instances as $instance) {
+        playervideo_grade_item_update($instance, 'reset');
+    }
+
+    $status[] = [
+        'component' => get_string('modulenameplural', 'mod_playervideo'),
+        'item'      => get_string('resetplayervideouserdata', 'mod_playervideo'),
+        'error'     => false,
+    ];
+
+    return $status;
+}

@@ -281,6 +281,7 @@ $string['questiontype'] = 'Tipo de pergunta';
 $string['removealternative'] = 'Remover alternativa';
 $string['removepolloption'] = 'Remover opção';
 $string['reportheader'] = 'Analytics';
+$string['resetplayervideouserdata'] = 'Excluir o progresso, as tentativas e as respostas dos estudantes';
 $string['result_correct'] = 'Correto';
 $string['result_incorrect'] = 'Incorreto';
 $string['result_notreached'] = 'Não alcançado';
