@@ -263,28 +263,61 @@ class mod_playervideo_mod_form extends moodleform_mod {
     /**
      * Adds custom completion rules to Moodle completion section.
      *
+     * The element names carry the form's suffix. The core shows this form on the "Default activity
+     * completion" page with the suffix "_playervideo" and drops any custom rule whose name lacks it,
+     * which would also erase the rules from the defaults of every new activity.
+     *
      * @return array
      */
     public function add_completion_rules(): array {
         $mform = $this->_form;
+        $suffix = $this->get_suffix();
 
         $mform->addElement(
             'checkbox',
-            'completionallinteractions',
+            'completionallinteractions' . $suffix,
             '',
             get_string('completiondetail:allinteractions', 'mod_playervideo')
         );
-        $mform->setType('completionallinteractions', PARAM_INT);
+        $mform->setType('completionallinteractions' . $suffix, PARAM_INT);
 
         $mform->addElement(
             'checkbox',
-            'completionwatchtoend',
+            'completionwatchtoend' . $suffix,
             '',
             get_string('completiondetail:watchtoend', 'mod_playervideo')
         );
-        $mform->setType('completionwatchtoend', PARAM_INT);
+        $mform->setType('completionwatchtoend' . $suffix, PARAM_INT);
 
-        return ['completionallinteractions', 'completionwatchtoend'];
+        return ['completionallinteractions' . $suffix, 'completionwatchtoend' . $suffix];
+    }
+
+    /**
+     * Stores an unticked completion rule as 0.
+     *
+     * A browser does not send an unticked checkbox, so the rule is missing from the submitted data and
+     * the update would leave the old 1 in the database. The rules only apply with automatic tracking,
+     * so they are also cleared when the teacher switches to another tracking mode.
+     *
+     * @param \stdClass $data Submitted data.
+     * @return void
+     */
+    public function data_postprocessing($data): void {
+        parent::data_postprocessing($data);
+
+        if (empty($data->completionunlocked)) {
+            return;
+        }
+
+        $suffix = $this->get_suffix();
+        $automatic = !empty($data->{'completion' . $suffix})
+            && (int) $data->{'completion' . $suffix} === COMPLETION_TRACKING_AUTOMATIC;
+
+        foreach (['completionallinteractions', 'completionwatchtoend'] as $rule) {
+            if (!$automatic || empty($data->{$rule . $suffix})) {
+                $data->{$rule . $suffix} = 0;
+            }
+        }
     }
 
     /**
@@ -294,6 +327,8 @@ class mod_playervideo_mod_form extends moodleform_mod {
      * @return bool
      */
     public function completion_rule_enabled($data): bool {
-        return !empty($data['completionallinteractions']) || !empty($data['completionwatchtoend']);
+        $suffix = $this->get_suffix();
+
+        return !empty($data['completionallinteractions' . $suffix]) || !empty($data['completionwatchtoend' . $suffix]);
     }
 }

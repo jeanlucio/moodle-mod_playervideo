@@ -531,4 +531,116 @@ final class mod_form_test extends \advanced_testcase {
         $this->assertNotEmpty($limits, 'The video URL field has no maxlength rule.');
         $this->assertLessThanOrEqual(255, min($limits));
     }
+
+    /**
+     * An unticked completion rule is stored as 0.
+     *
+     * A browser does not send an unticked checkbox, so the rule is simply missing from the submitted data
+     * and, unless the form fills it in, the update leaves the old 1 in the database: the box comes back
+     * ticked and the activity keeps the rule the teacher just removed.
+     *
+     * @return void
+     */
+    public function test_an_unticked_completion_rule_is_submitted_as_zero(): void {
+        $form = $this->build_form();
+        $data = (object) [
+            'completionunlocked' => 1,
+            'completion' => COMPLETION_TRACKING_AUTOMATIC,
+            'completionwatchtoend' => 1,
+        ];
+
+        $form->data_postprocessing($data);
+
+        $this->assertSame(0, (int) $data->completionallinteractions);
+        $this->assertSame(1, (int) $data->completionwatchtoend);
+    }
+
+    /**
+     * Both rules go off when the tracking is not automatic, and stay untouched when the form locks them.
+     *
+     * @return void
+     */
+    public function test_completion_rules_only_stay_on_with_automatic_tracking(): void {
+        $form = $this->build_form();
+
+        $manual = (object) [
+            'completionunlocked' => 1,
+            'completion' => COMPLETION_TRACKING_MANUAL,
+            'completionallinteractions' => 1,
+            'completionwatchtoend' => 1,
+        ];
+        $form->data_postprocessing($manual);
+        $this->assertSame(0, (int) $manual->completionallinteractions);
+        $this->assertSame(0, (int) $manual->completionwatchtoend);
+
+        $locked = (object) [
+            'completion' => COMPLETION_TRACKING_MANUAL,
+            'completionallinteractions' => 1,
+            'completionwatchtoend' => 1,
+        ];
+        $form->data_postprocessing($locked);
+        $this->assertSame(1, (int) $locked->completionallinteractions);
+        $this->assertSame(1, (int) $locked->completionwatchtoend);
+    }
+
+    /**
+     * The whole save: the stored rule really goes to 0 in the database when the teacher unticks it.
+     *
+     * @return void
+     */
+    public function test_saving_with_a_rule_unticked_clears_it_in_the_database(): void {
+        global $CFG, $DB, $PAGE;
+        require_once($CFG->dirroot . '/mod/playervideo/lib.php');
+
+        $course = $this->getDataGenerator()->create_course(['enablecompletion' => 1]);
+        $instance = $this->getDataGenerator()->create_module('playervideo', [
+            'course' => $course->id,
+            'completion' => COMPLETION_TRACKING_AUTOMATIC,
+            'completionallinteractions' => 1,
+            'completionwatchtoend' => 1,
+        ]);
+        $PAGE->set_course($course);
+        $cm = get_coursemodule_from_instance('playervideo', $instance->id);
+        $formdata = clone $instance;
+        $formdata->instance = $instance->id;
+        $formdata->id = $cm->id;
+        $formdata->course = $course->id;
+        $form = new \mod_playervideo_mod_form($formdata, 0, $cm, $course);
+
+        // What the form returns when the box was unticked: the key is absent.
+        $data = $DB->get_record('playervideo', ['id' => $instance->id], '*', MUST_EXIST);
+        unset($data->completionallinteractions);
+        $data->instance = $instance->id;
+        $data->coursemodule = $cm->id;
+        $data->completionunlocked = 1;
+        $data->completion = COMPLETION_TRACKING_AUTOMATIC;
+
+        $form->data_postprocessing($data);
+        playervideo_update_instance($data, $form);
+
+        $this->assertSame(0, (int) $DB->get_field('playervideo', 'completionallinteractions', ['id' => $instance->id]));
+        $this->assertSame(1, (int) $DB->get_field('playervideo', 'completionwatchtoend', ['id' => $instance->id]));
+    }
+
+    /**
+     * The rule elements carry the form's suffix.
+     *
+     * The core shows the form on the "Default activity completion" page with a suffix and removes any
+     * custom rule whose name lacks it, which would erase the rules from the defaults of every new activity.
+     *
+     * @return void
+     */
+    public function test_completion_rule_elements_carry_the_form_suffix(): void {
+        $form = $this->build_form();
+        $mform = $this->get_quickform($form);
+
+        $form->set_suffix('_playervideo');
+        $names = $form->add_completion_rules();
+
+        $this->assertSame(['completionallinteractions_playervideo', 'completionwatchtoend_playervideo'], $names);
+        foreach ($names as $name) {
+            $this->assertTrue($mform->elementExists($name));
+        }
+        $this->assertTrue($form->completion_rule_enabled(['completionwatchtoend_playervideo' => 1]));
+    }
 }
