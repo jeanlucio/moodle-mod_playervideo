@@ -350,6 +350,7 @@ class restore_playervideo_activity_structure_step extends restore_activity_struc
         global $DB;
 
         $data = (object) $data;
+        $oldid = $data->id;
 
         $newattemptid = $this->get_new_parentid('playervideo_attempt');
         $newuserid = (int) $this->get_mappingid('user', $data->userid);
@@ -383,7 +384,9 @@ class restore_playervideo_activity_structure_step extends restore_activity_struc
             : 0;
         $data->polloptionid = $newpolloptionid > 0 ? $newpolloptionid : null;
 
-        $DB->insert_record('playervideo_responses', $data);
+        $newitemid = $DB->insert_record('playervideo_responses', $data);
+        // Registered so the activity task can decode the links in the answer and the teacher feedback.
+        $this->set_mapping('playervideo_response', $oldid, $newitemid);
     }
 
     /**

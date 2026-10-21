@@ -744,4 +744,50 @@ final class backup_restore_test extends \advanced_testcase {
         $this->assertStringContainsString($CFG->wwwroot . '/course/view.php?id=' . $newcourse->id, $note->notetext);
         $this->assertStringNotContainsString('$@', $note->notetext);
     }
+
+    /**
+     * The links inside a student's answer and the teacher's feedback survive a restore: the backup encodes
+     * every link in the text columns it writes, and only the activity's intro and the interaction text
+     * were decoded back.
+     *
+     * @return void
+     */
+    public function test_backup_restore_decodes_links_in_responses(): void {
+        global $CFG, $DB;
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $user = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->enrol_user($user->id, $course->id, 'student');
+        $instance = $this->getDataGenerator()->create_module('playervideo', ['course' => $course->id]);
+        $link = $CFG->wwwroot . '/course/view.php?id=' . $course->id;
+        $now = time();
+        $interactionid = $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $instance->id, 'timestamp' => 10, 'type' => 'note', 'weight' => 1,
+            'questionid' => null, 'notetext' => 'Explain it', 'notetextformat' => FORMAT_HTML,
+            'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $attemptid = $DB->insert_record('playervideo_attempts', (object) [
+            'playervideoid' => $instance->id, 'userid' => $user->id, 'attemptnumber' => 1,
+            'status' => 'finished', 'grade' => 100.0, 'hudretrycharged' => 0,
+            'timestart' => $now, 'timefinish' => $now, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('playervideo_responses', (object) [
+            'playervideoid' => $instance->id, 'userid' => $user->id, 'attemptid' => $attemptid,
+            'interactionid' => $interactionid, 'questionid' => null, 'answerid' => null,
+            'polloptionid' => null, 'responsetext' => 'As in ' . $link, 'iscorrect' => null, 'hudrewarded' => 0,
+            'aigrade' => null, 'aifeedback' => null, 'teachergrade' => null,
+            'teacherfeedback' => 'Good, also read ' . $link,
+            'status' => 'answered', 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $newcourse = $this->backup_and_restore_into_new_course($course);
+
+        $newinstance = $DB->get_record('playervideo', ['course' => $newcourse->id], '*', MUST_EXIST);
+        $response = $DB->get_record('playervideo_responses', ['playervideoid' => $newinstance->id], '*', MUST_EXIST);
+        $newlink = $CFG->wwwroot . '/course/view.php?id=' . $newcourse->id;
+        $this->assertStringContainsString($newlink, $response->responsetext);
+        $this->assertStringContainsString($newlink, $response->teacherfeedback);
+        $this->assertStringNotContainsString('$@', $response->responsetext . $response->teacherfeedback);
+    }
 }
