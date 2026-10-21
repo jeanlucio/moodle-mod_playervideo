@@ -715,4 +715,33 @@ final class backup_restore_test extends \advanced_testcase {
 
         return $newcourse;
     }
+
+    /**
+     * The links inside a note interaction survive a backup and restore: the backup encodes every link in
+     * the text columns it writes, and the restore only decoded the activity's intro, so the placeholder
+     * itself reached the students.
+     *
+     * @return void
+     */
+    public function test_backup_restore_decodes_links_in_the_note_text(): void {
+        global $CFG, $DB;
+        $this->setAdminUser();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('playervideo', ['course' => $course->id]);
+        $link = $CFG->wwwroot . '/course/view.php?id=' . $course->id;
+        $now = time();
+        $DB->insert_record('playervideo_interactions', (object) [
+            'playervideoid' => $instance->id, 'timestamp' => 20, 'type' => 'note', 'weight' => 1,
+            'questionid' => null, 'notetext' => 'Read <a href="' . $link . '">the course</a>',
+            'notetextformat' => FORMAT_HTML, 'sortorder' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $newcourse = $this->backup_and_restore_into_new_course($course);
+
+        $newinstance = $DB->get_record('playervideo', ['course' => $newcourse->id], '*', MUST_EXIST);
+        $note = $DB->get_record('playervideo_interactions', ['playervideoid' => $newinstance->id], '*', MUST_EXIST);
+        $this->assertStringContainsString($CFG->wwwroot . '/course/view.php?id=' . $newcourse->id, $note->notetext);
+        $this->assertStringNotContainsString('$@', $note->notetext);
+    }
 }

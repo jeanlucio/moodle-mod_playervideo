@@ -58,6 +58,9 @@ class restore_playervideo_activity_task extends restore_activity_task {
     public static function define_decode_contents(): array {
         return [
             new restore_decode_content('playervideo', ['intro'], 'playervideo'),
+            // The backup transformer encodes the links inside every text column it writes, so the note
+            // and poll prompt the students read have to be decoded back too.
+            new restore_decode_content('playervideo_interactions', ['notetext'], 'playervideo_interaction'),
         ];
     }
 
